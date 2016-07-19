@@ -15,97 +15,32 @@
 # include <boost/spirit/include/qi.hpp>
 # include <boost/spirit/include/phoenix.hpp>
 
-namespace boost { namespace detail {
-    
-    template <int N, typename T>
-    inline void 
-    assign_value_action(const double value, eva::fixed_vector<N,T>& vec, const size_t idx) 
-    {
-        vec(idx) = value;
-    }
-
-    template<int N, typename T>
-    struct lexical_cast_do_cast<eva::fixed_vector<N,T>, std::string>
-    {         
-        /// Alias for parser input iterator type
-        using iterator_type = std::string::const_iterator;
-        
-        static inline
-        eva::fixed_vector<N,T>
-        lexical_cast_impl(const std::string& str) 
-        {
-            namespace qi    = boost::spirit::qi;
-            namespace phx   = boost::phoenix;
-            //~ namespace ascii = boost::spirit::ascii;
-            
-            qi::rule<iterator_type, eva::fixed_vector<N,T>(),
-                     qi::locals<int>, qi::blank_type> rule = 
-                qi::eps [ qi::_a = 0 ]
-                > '['
-                > qi::repeat(N-1) [
-                    qi::double_[phx::bind(&assign_value_action<N,T>, qi::_1, qi::_val, qi::_a++)]
-                    > ',' 
-                ]
-                > qi::double_[phx::bind(&assign_value_action<N,T>, qi::_1, qi::_val, qi::_a)]
-                > ']'
-            ;
-                      
-            auto ret = eva::fixed_vector<N,T>();
-            
-            auto iter(str.begin()), iend(str.end());
-            
-            bool r = phrase_parse(iter, iend, rule, qi::blank, ret);
-            
-            if (r && iter == iend) { 
-                std::cout << "Parsing succeded\n";
-            } else {
-            //~ if (!r || iter != iend) {
-                std::cout << "-------------------------\n";
-                std::cout << "Parsing failed\n";
-                std::cout << str << std::endl;
-                //~ std::cout << r << "\n" << (iter==iend) << "\n";
-                std::cout << "-------------------------\n";
-            }
-            return ret;
-        }
-        /* OLD, UGLY, SLOW
-        static inline
-        eva::fixed_vector<N,T>
-        lexical_cast_impl(const std::string& str) 
-        {
-            auto line = str;                         // Temporary
-            std::istringstream iss (std::move(line));// Move construct istringstream
-            
-            auto vec = eva::fixed_vector<N>();
-            for (auto i = 0; i < N; ++i) {
-                std::string str;
-                iss >> str;
-                // FIXME: what for size_t, int etc..??
-                if (std::is_same<T, double>::value) vec(i) = std::stod(str);
-                if (std::is_same<T,  float>::value) vec(i) = std::stof(str);
-                if (std::is_same<T,    int>::value) vec(i) = std::stoi(str);
-            }
-            return vec;
-        }*/
-    };
-} }
 
 namespace eva {
     
 //####################################### DECLARATIONS #############################################
 
 // -- Read -- //
+
+/// Reads and builds a structure from a proper input file
 template <typename Structure>
 Structure
 read_from_graphviz(const std::string& filename);
 
+/// Adds to the dynamic property map the properties required for reading a given structure
 template <typename Structure> 
 void 
 setup_joint_properties(Structure& structure, boost::dynamic_properties& dyna_props);
 
+/// Functor that selects the joint properties that have to be red from the input file.
+/// Has to be specialized for each joint type
 template <typename JointProps> struct joint_properties_selector;
 
+/// Specializes joint_properties_selector for reading a truss_joint 
 template <int N> struct joint_properties_selector<truss_joint<N>>;
+
+/// Specializes joint_properties_selector for reading a frame_joint<2> 
+template <> struct joint_properties_selector<frame_joint<2>>;
 
 
 template <typename Structure> 
@@ -238,6 +173,83 @@ setup_element_properties(Structure& s, boost::dynamic_properties& dps)
 
 
 } //end namespace eva
+
+namespace boost { namespace detail {
+    
+template <int N, typename T>
+inline void 
+assign_value_action(const double value, eva::fixed_vector<N,T>& vec, const size_t idx) 
+{
+    vec(idx) = value;
+}
+
+
+
+template<int N, typename T>
+struct lexical_cast_do_cast<eva::fixed_vector<N,T>, std::string>
+{         
+    /// Alias for parser input iterator type
+    using iterator_type = std::string::const_iterator;
+    
+    static inline
+    eva::fixed_vector<N,T>
+    lexical_cast_impl(const std::string& str) 
+    {
+        namespace qi    = boost::spirit::qi;
+        namespace phx   = boost::phoenix;
+        //~ namespace ascii = boost::spirit::ascii;
+        
+        qi::rule<iterator_type, eva::fixed_vector<N,T>(),
+                 qi::locals<int>, qi::blank_type> rule = 
+            qi::eps [ qi::_a = 0 ]
+            >> '['
+            >> qi::repeat(N-1) [
+                qi::double_[phx::bind(&assign_value_action<N,T>, qi::_1, qi::_val, qi::_a++)]
+                >> ',' 
+            ]
+            >> qi::double_[phx::bind(&assign_value_action<N,T>, qi::_1, qi::_val, qi::_a)]
+            >> ']'
+        ;
+                  
+        auto ret = eva::fixed_vector<N,T>();
+        
+        auto iter(str.begin()), iend(str.end());
+        
+        bool r = phrase_parse(iter, iend, rule, qi::blank, ret);
+        
+        //~ if (r && iter == iend) { 
+            //~ std::cout << "Parsing succeded\n";
+        //~ } else {
+        if (!r || iter != iend) {
+            std::cout << "-------------------------\n";
+            std::cout << "Parsing failed\n";
+            std::cout << str << std::endl;
+            //~ std::cout << r << "\n" << (iter==iend) << "\n";
+            std::cout << "-------------------------\n";
+        }
+        return ret;
+    }
+    /* OLD, UGLY, SLOW
+    static inline
+    eva::fixed_vector<N,T>
+    lexical_cast_impl(const std::string& str) 
+    {
+        auto line = str;                         // Temporary
+        std::istringstream iss (std::move(line));// Move construct istringstream
+        
+        auto vec = eva::fixed_vector<N>();
+        for (auto i = 0; i < N; ++i) {
+            std::string str;
+            iss >> str;
+            // FIXME: what for size_t, int etc..??
+            if (std::is_same<T, double>::value) vec(i) = std::stod(str);
+            if (std::is_same<T,  float>::value) vec(i) = std::stof(str);
+            if (std::is_same<T,    int>::value) vec(i) = std::stoi(str);
+        }
+        return vec;
+    }*/
+};
+} } // end details and boost
 
 # endif //__EVA_IO__
 

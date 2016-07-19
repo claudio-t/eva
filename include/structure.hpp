@@ -61,19 +61,22 @@ using generic_structure = boost::adjacency_list< boost::vecS, boost::vecS, boost
 //----------------------------------- Functors and Functions -------------------------------------//
 
 // -- Post-processing --//
-template <typename StructureType> struct internal_forces_getter;
 
 template <typename Structure> 
 decltype(auto)
 get_internal_forces(const typename Structure::edge_descriptor& e, const Structure& s, 
                     const std::vector<real>& u, const std::vector<real>& f);
 
+template <typename StructureType> struct internal_forces_getter;
+
 // -- Problem Solving -- //
-/// Generic solver functor: has to be specialized for every structure type
-template <typename StructureType> struct solver;
 
 /// Convenient wrapper for the solver functor
 template <typename Structure> decltype(auto) solve(const Structure& s);
+
+/// Generic solver functor: has to be specialized for every structure type
+template <typename StructureType> struct solver;
+
 
 
 // -- Problem Assembling -- //
@@ -98,12 +101,13 @@ template <typename Structure>
 decltype(auto)
 assemble_element_matrix(const typename Structure::edge_descriptor& e, const Structure& s);
 
-/// Assembles the known terms vectors (source term and BCs related DOF).
+/// Functor that assembles the known terms vectors (source term and BCs related DOF).
 /// Has to be specialized for every structure type
 template <typename StructureType> struct known_terms_assembler;
 
 
 // -- DOF handling -- //
+
 /// Builds a DOF map where the positions of DOF associated 
 /// to BCs are located at the end
 template <typename S>
@@ -188,7 +192,7 @@ struct solver
         //
         
         // Assemble system stiffness matrices (in global coordinates)
-        auto matrices = assemble_stiffness_matrix(s, dofmap, n_f, n_b);
+        auto matrices = assemble_stiffness_matrix_sp(s, dofmap, n_f, n_b);
         const auto& K_ff = std::get<0>(matrices);
         const auto& K_fb = std::get<1>(matrices);
         const auto& K_bb = std::get<2>(matrices);
@@ -219,9 +223,9 @@ struct solver
         //
         // Solve condensed system:
         // K_ff * u_f = f_f - K_fb * u_b
-        Eigen::LDLT<dense_matrix> eigen_solver(K_ff);        
+        //~ Eigen::LDLT<dense_matrix> eigen_solver(K_ff);        
         //~ Eigen::SimplicialLLT<sparse_matrix> eigen_solver(K_ff);
-        //~ Eigen::ConjugateGradient<sparse_matrix> eigen_solver(K_ff);
+        Eigen::ConjugateGradient<sparse_matrix> eigen_solver(K_ff);
         auto u_f = eigen_solver.solve(f_f - K_fb * u_b);
         
         // Timing
@@ -301,9 +305,9 @@ assemble_stiffness_matrix(const S& s, const std::vector<index_t>& dofmap,
     const static size_t dim = S::graph_bundled::ndof;
     
     // Init SYSTEM SUB-matrices
-    auto matrices = std::array<dense_matrix, 3> {dense_matrix::Zero(n_f, n_f),
-                                                 dense_matrix::Zero(n_f, n_b),
-                                                 dense_matrix::Zero(n_b, n_b)};
+    auto matrices = std::array<dense_matrix, 3> { dense_matrix::Zero(n_f, n_f),
+                                                  dense_matrix::Zero(n_f, n_b),
+                                                  dense_matrix::Zero(n_b, n_b) };
     
     auto& K_ff = std::get<0>(matrices);
     auto& K_fb = std::get<1>(matrices);
@@ -635,7 +639,8 @@ merge_and_reorder(const sparse_vector& v_f,
     
     // Auxiliary vector that just concatenates v_f and v_b
     auto auxv = std::vector<real>(n_t);
-    
+    //~ auto auxv = dense_vector(n_t);
+    //~ auxv << v_f, v_b;
     // Fill auxiliary vector with free DOF values
     for (auto it = Eigen::SparseVector<double>::InnerIterator(v_f); it; ++it)
         auxv[it.index()] = it.value();

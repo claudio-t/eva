@@ -2,7 +2,7 @@ graph {
     /* -- Nodes -- */
     A[coords = "[0.0, 0.0]", bcs = "[0.0, 0.0, NAN]", load = "[0.0, 0.0]"];
     B[coords = "[0.0, 2.0]", bcs = "[NAN, NAN, NAN]", load = "[0.0, 0.0]"];
-    C[coords = "[1.5, 3.0]", bcs = "[NAN, NAN, NAN]", load = "[0.0,-2.e4.]", torque = "0.0"];
+    C[coords = "[1.5, 3.0]", bcs = "[NAN, NAN, NAN]", load = "[0.0,-2.e4]", torque = "0.0"];
     D[coords = "[3.0, 2.0]", bcs = "[NAN, NAN, NAN]", load = "[0.0, 0.0]"];
     E[coords = "[3.0, 0.0]", bcs = "[0.0, 0.0, NAN]", load = "[0.0, 0.0]"];
     

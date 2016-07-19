@@ -7,9 +7,9 @@
 int main(int argc, char * argv []) {
         
     // Read from file
-    auto filename = std::string("input/truss3d.dot");
+    auto filename = std::string("input/frame2d.dot");
     
-    auto structure = eva::read_from_graphviz<eva::truss3d>(filename);
+    auto structure = eva::read_from_graphviz<eva::frame2d>(filename);
         
     auto u = std::vector<eva::real> ();
     auto f = std::vector<eva::real> ();

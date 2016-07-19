@@ -13,13 +13,13 @@ namespace eva {
 //####################################### DECLARATIONS #############################################
 
 //--------------------------------------- Properties ---------------------------------------------//
-/// Truss joint (node) properties
+/// Frame joint (node) properties
 template <int N> struct frame_joint;
 
-/// Truss element (edge) properties
+/// Frame element (edge) properties
 template <int N> struct frame_element;
 
-/// Truss tag type
+/// Frame tag type
 template <int N> struct frame_type 
 {         
     constexpr static int ndof = 3*(N-1); 
@@ -27,24 +27,24 @@ template <int N> struct frame_type
 };
 
 //--------------------------------- 2/3-D truss typedefs -----------------------------------------//
-/// 2-dimensional truss structure type
+/// 2-dimensional frame structure type
 typedef generic_structure<frame_joint<2>, frame_element<2>, frame_type<2>> frame2d; 
 
-/// 3-dimensional truss structure type
+/// 3-dimensional frame structure type
 typedef generic_structure<frame_joint<3>, frame_element<3>, frame_type<3>> frame3d; 
 
 //----------------------------------- Functors and Functions -------------------------------------//
 // -- Problem Assembling -- //
 
-/// Matrix assembler functor specialization for a 2D frame
+/// Specializes element_matrix_assembler functor for a 2D frame
 template <> 
 struct element_matrix_assembler<frame_type<2>>;
 
-/// Matrix assembler functor specialization for a 3D frame
+/// Specializes element_matrix_assembler functor for a 3D frame
 template <> 
 struct element_matrix_assembler<frame_type<3>>;
 
-/// Known terms assembler functor specialization for both 2D and 3D frames
+/// Specializes known_terms_assembler functor for both 2D and 3D frames
 template <int N>
 struct known_terms_assembler<frame_type<N>>;
 
@@ -55,13 +55,22 @@ struct known_terms_assembler<frame_type<N>>;
 //--------------------------------------- Properties ---------------------------------------------//
 template <int N> struct frame_joint 
 {    
-    fixed_vector<N> coords;       ///< Joint coordinates
+    fixed_vector<N> coords;     ///< Joint coordinates
     
-    fixed_vector<N> load;         ///< Nodal load [N]
+    fixed_vector<N> load;       ///< Nodal load [N]
     
     fixed_vector<2*N-3> torque; ///< Nodal torque [Nm]
     
-    fixed_vector<3*(N-1)> bcs;   ///< Boundary conditions [[displ.s], [rot.s]]
+    fixed_vector<3*(N-1)> bcs;  ///< Boundary conditions [[displ.s], [rot.s]]
+    
+    /// Default constructor. Initializes coords to zero,
+    /// load to zero, torque to zero and bcs to nan
+    frame_joint()
+    : coords(fixed_vector<N>::Zero()) 
+    , load  (fixed_vector<N>::Zero())
+    , torque(fixed_vector<2*N-3>::Zero())
+    , bcs   (fixed_vector<3*(N-1)>::Constant(std::numeric_limits<real>::quiet_NaN()))
+    {}
 };
 
 
@@ -127,6 +136,7 @@ struct element_matrix_assembler<frame_type<2>>
         // Build element matrix in GLOBAL coordinates
         // DOF: [ [F_x, F_y, M]_{node A}, [F_x, F_y, M]_{node B} ] 
         auto k = fixed_matrix<6,6> ();
+        
         k <<  EA/L*cc + 12.*EI/L3*ss,  EA/L*cs - 12.*EI/L3*cs, -6.*EI/L2*s,
              -EA/L*cc - 12.*EI/L3*ss, -EA/L*cs + 12.*EI/L3*cs, -6.*EI/L2*s,
             
@@ -183,6 +193,7 @@ struct element_matrix_assembler<frame_type<3>>
         // Build element matrix in GLOBAL coordinates
         // DOF: [ [F_x, F_y, M]_{node A}, [F_x, F_y, M]_{node B} ] 
         auto k = fixed_matrix<6,6> ();
+        
         k << EA/L*cc + 12.*EI/L3*ss,  EA/L*cs - 12.*EI/L3*cs, -6.*EI/L2*s,
             -EA/L*cc - 12.*EI/L3*ss, -EA/L*cs + 12.*EI/L3*cs, -6.*EI/L2*s,
             
@@ -236,16 +247,17 @@ struct known_terms_assembler<frame_type<N>>
             
             // Source term storage for DOF associated with vertex v
             auto rhs_v = fixed_vector<ndof>();
+            rhs_v << load, torque;
             
-            // Store LOAD components
-            const auto l_size = load.size();
-            for (size_t i = 0u; i < l_size; ++i) 
-                rhs_v(i) = load(i);
-            
-            // Store TORQUE components
-            const auto t_size = torque.size();
-            for (size_t i = 0u; i < t_size; ++i) 
-                rhs_v(i+l_size) = torque(i);
+            //~ // Store LOAD components
+            //~ const auto l_size = load.size();
+            //~ for (size_t i = 0u; i < l_size; ++i) 
+                //~ rhs_v(i) = load(i);
+            //~ 
+            //~ // Store TORQUE components
+            //~ const auto t_size = torque.size();
+            //~ for (size_t i = 0u; i < t_size; ++i) 
+                //~ rhs_v(i+l_size) = torque(i);
             
             // Compute equivalent load configuration for 
             // a distributed load a/o a concentrated load

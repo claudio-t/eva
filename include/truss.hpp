@@ -46,15 +46,15 @@ struct internal_forces_getter<truss_type<N>>;
 
 // -- Problem Assembling -- //
 
-/// Matrix assembler functor specialization for a 2D frame
+/// Specializes element_matrix_assembler functor for a 2D trusses
 template <>
 struct element_matrix_assembler<truss_type<2>>;
 
-/// Matrix assembler functor specialization for a 2D frame
+/// Specializes element_matrix_assembler functor for a 3D trusses
 template <>
 struct element_matrix_assembler<truss_type<3>>; 
 
-/// Known terms assembler functor specialization for both 2D and 3D trusses
+/// Specializes known_terms_assembler functor for both 2D and 3D trusses
 template <int N>
 struct known_terms_assembler<truss_type<N>>;     
 
@@ -68,8 +68,10 @@ template <int N> struct truss_joint
     
     fixed_vector<N> load;   ///< Applied load [N]
     
-    fixed_vector<N> bcs;     ///< Boundary conditions
+    fixed_vector<N> bcs;    ///< Boundary conditions
     
+    /// Default constructor. Initializes
+    /// coords to zero, load to zero and bcs to nan
     truss_joint()
     : coords(fixed_vector<N>::Zero()) 
     , load  (fixed_vector<N>::Zero())
