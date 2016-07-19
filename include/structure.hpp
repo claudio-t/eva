@@ -235,7 +235,7 @@ struct solver
         auto f_b = K_fb.transpose() * u_f + K_bb * u_b;
         
         // Asemble displacement and force vectors 
-        // using the original DOF numbering
+        // using the original DOF ordering
         auto uu = merge_and_reorder(u_f, u_b, dofmap);
         auto ff = merge_and_reorder(f_f, f_b, dofmap);
         

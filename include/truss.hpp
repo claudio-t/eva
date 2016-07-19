@@ -40,25 +40,23 @@ typedef generic_structure<truss_joint<3>, truss_element<3>, truss_type<3>> truss
 //----------------------------------- Functors and Functions -------------------------------------//
 
 // -- Post-processing --//
-template <int N> struct internal_forces_getter<truss_type<N>>;
 
+template <int N> 
+struct internal_forces_getter<truss_type<N>>;
 
 // -- Problem Assembling -- //
-/// Builds the truss element matrix in GLOBAL coordinates
-template <int N> 
-fixed_matrix<2*N, 2*N> 
-truss_element_matrix(const fixed_vector<N>& a, const fixed_vector<N>& b, real EA);
 
-template<> 
-fixed_matrix<4,4>
-truss_element_matrix<2>(const fixed_vector<2>& a, const fixed_vector<2>& b, real EA);
+/// Matrix assembler functor specialization for a 2D frame
+template <>
+struct element_matrix_assembler<truss_type<2>>;
 
-template<> 
-fixed_matrix<6,6>
-truss_element_matrix<3>(const fixed_vector<3>& a, const fixed_vector<3>& b, real EA);
+/// Matrix assembler functor specialization for a 2D frame
+template <>
+struct element_matrix_assembler<truss_type<3>>; 
 
-template <int N> struct known_terms_assembler<truss_type<N>>;
-    
+/// Known terms assembler functor specialization for both 2D and 3D trusses
+template <int N>
+struct known_terms_assembler<truss_type<N>>;     
 
 
 //####################################### DEFINITIONS ##############################################

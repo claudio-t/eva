@@ -38,7 +38,6 @@ namespace boost { namespace detail {
             namespace phx   = boost::phoenix;
             //~ namespace ascii = boost::spirit::ascii;
             
-            //~ auto rule = make_vector_rule('(', ')');
             qi::rule<iterator_type, eva::fixed_vector<N,T>(),
                      qi::locals<int>, qi::blank_type> rule = 
                 qi::eps [ qi::_a = 0 ]
@@ -69,29 +68,6 @@ namespace boost { namespace detail {
             }
             return ret;
         }
-        
-        //~ static
-        //~ spirit::qi::rule<iterator_type, eva::fixed_vector<N,T>(), spirit::qi::locals<size_t>, spirit::ascii::space_type>
-        //~ make_vector_rule(const char delim_lx, const char delim_rx)
-        //~ {
-            //~ namespace qi    = boost::spirit::qi;
-            //~ namespace phx   = boost::phoenix;
-            //~ namespace ascii = boost::spirit::ascii;
-            //~ 
-            //~ qi::rule<iterator_type, eva::fixed_vector<N,T>(),
-                     //~ qi::locals<int>, ascii::space_type> 
-                //~ rule = 
-                //~ qi::eps [ qi::_a = 0 ]
-                //~ >> delim_lx
-                //~ >> qi::repeat(N) [
-                        //~ qi::double_[phx::bind(&assign_value_action<N,T>, qi::_1, qi::_val, qi::_a++)]
-                        //~ >> ',' 
-                //~ ]
-                //~ >> qi::double_[phx::bind(&assign_value_action<N,T>, qi::_1, qi::_val, qi::_a)]
-                //~ >> delim_rx
-            //~ ;
-            //~ return rule;
-        //~ }
         /* OLD, UGLY, SLOW
         static inline
         eva::fixed_vector<N,T>
@@ -145,8 +121,8 @@ template <int N> struct element_properties_selector<truss_element<N>>;
 // -- Read -- //
 template <typename Structure>
 Structure
-read_from_graphviz(const std::string& filename) {
-    
+read_from_graphviz(const std::string& filename) 
+{    
     // Build empty structure //
     auto structure = Structure();
     
@@ -165,12 +141,12 @@ read_from_graphviz(const std::string& filename) {
 
 
 template <int N>
-struct joint_properties_selector<truss_joint<N>> {
-    
+struct joint_properties_selector<truss_joint<N>> 
+{    
     template <typename Structure> 
     void 
-    operator()(Structure& s, boost::dynamic_properties& dps) {
-        
+    operator()(Structure& s, boost::dynamic_properties& dps) 
+    {
         // Type checking
         using vert_prop_type = typename Structure::vertex_bundled;
         static_assert(std::is_base_of<truss_joint<N>, vert_prop_type>::value, 
@@ -185,12 +161,12 @@ struct joint_properties_selector<truss_joint<N>> {
 
 
 template <int N>
-struct element_properties_selector<truss_element<N>> {
-    
+struct element_properties_selector<truss_element<N>> 
+{    
     template <typename Structure> 
     void 
-    operator()(Structure& s, boost::dynamic_properties& dps){
-        
+    operator()(Structure& s, boost::dynamic_properties& dps)
+    {
         // Type checking
         using edge_prop_type = typename Structure::edge_bundled;
         static_assert(std::is_base_of<truss_element<N>, edge_prop_type>::value, 
@@ -202,14 +178,14 @@ struct element_properties_selector<truss_element<N>> {
     }
 };
 
-/*
+
 template <>
-struct joint_properties_selector<frame_joint<2>> {
-    
+struct joint_properties_selector<frame_joint<2>> 
+{    
     template <typename Structure> 
     void 
-    operator()(Structure& s, boost::dynamic_properties& dps) {
-        
+    operator()(Structure& s, boost::dynamic_properties& dps) 
+    {
         // Type checking
         using vert_prop_type = typename Structure::vertex_bundled;
         
@@ -226,12 +202,12 @@ struct joint_properties_selector<frame_joint<2>> {
 };
 
 template <>
-struct element_properties_selector<frame_element<2>> {
-    
+struct element_properties_selector<frame_element<2>> 
+{    
     template <typename Structure> 
     void 
-    operator()(Structure& s, boost::dynamic_properties& dps){
-        
+    operator()(Structure& s, boost::dynamic_properties& dps)
+    {
         // Type checking
         using edge_prop_type = typename Structure::edge_bundled;
         static_assert(std::is_base_of<frame_element<2>, edge_prop_type>::value, 
@@ -243,20 +219,20 @@ struct element_properties_selector<frame_element<2>> {
         dps.property("I", get(&edge_prop_type::I, s));
     }
 };
-*/
+
 
 template <typename Structure> 
 void
-setup_joint_properties(Structure& s, boost::dynamic_properties& dps) {
-    
+setup_joint_properties(Structure& s, boost::dynamic_properties& dps) 
+{
     joint_properties_selector<typename Structure::vertex_bundled>()(s, dps);
 }
 
 
 template <typename Structure> 
 void
-setup_element_properties(Structure& s, boost::dynamic_properties& dps) {
-    
+setup_element_properties(Structure& s, boost::dynamic_properties& dps) 
+{
     element_properties_selector<typename Structure::edge_bundled>()(s, dps);
 }
 
