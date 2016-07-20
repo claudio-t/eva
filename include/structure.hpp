@@ -67,15 +67,19 @@ decltype(auto)
 get_internal_forces(const typename Structure::edge_descriptor& e, const Structure& s, 
                     const std::vector<real>& u, const std::vector<real>& f);
 
-template <typename StructureType> struct internal_forces_getter;
+template <typename StructureType> 
+struct internal_forces_getter;
 
 // -- Problem Solving -- //
 
 /// Convenient wrapper for the solver functor
-template <typename Structure> decltype(auto) solve(const Structure& s);
+template <typename Kind/*=void*/, typename Structure> 
+decltype(auto)
+solve(const Structure& s);
 
 /// Generic solver functor: has to be specialized for every structure type
-template <typename StructureType> struct solver;
+template <typename StructureType> 
+struct solver;
 
 
 
@@ -94,7 +98,8 @@ assemble_known_terms(const S& s, const size_t n_f, const size_t n_b);
 
 /// Assembles the element (local) stiffness matrix. 
 /// Has to be specialized for every structure type
-template <typename StructureType> struct element_matrix_assembler;
+template <typename StructureType> 
+struct element_matrix_assembler;
 
 /// Convenient wrapper for the element_matrix_assembler functor
 template <typename Structure> 
@@ -103,7 +108,8 @@ assemble_element_matrix(const typename Structure::edge_descriptor& e, const Stru
 
 /// Functor that assembles the known terms vectors (source term and BCs related DOF).
 /// Has to be specialized for every structure type
-template <typename StructureType> struct known_terms_assembler;
+template <typename StructureType> 
+struct known_terms_assembler;
 
 
 // -- DOF handling -- //
@@ -248,11 +254,18 @@ struct solver
 };
 
 
-template <typename Structure> 
+template <typename Kind = void, typename Structure> 
 decltype(auto)
 solve(const Structure& s) 
 {
-    return solver<typename Structure::graph_bundled>()(s);
+    // Se Tag è void usa la print_tag di T, altrimenti usa direttamente Tag
+    // If Kind is void use Structure kind, else directly use Kind
+    using kind_t = typename std::conditional< 
+                        std::is_void<Kind>::value, 
+                        typename Structure::graph_bundled, Kind
+                    >::type;
+                    
+    return solver<kind_t>()(s);
 }
 
 
