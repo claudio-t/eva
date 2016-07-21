@@ -7,7 +7,11 @@
 int main(int argc, char * argv []) {
         
     // Read from file
-    auto filename = std::string("input/frame2d.dot");
+    if(argc < 2) {
+        std::cout << "Input file missing!\n";
+        return 0;
+    }
+    auto filename = std::string(argv[1]);
     
     auto structure = eva::read_from_graphviz<eva::frame2d>(filename);
         
@@ -16,12 +20,18 @@ int main(int argc, char * argv []) {
     std::tie(u,f) = solve(structure);
     
     std::cout << "-----------------------------------------------" 
-              << std::endl << "Displacements:" << std::endl;
+              << std::endl << "Displacements:\n";
     for (const auto& el : u) std::cout << el << std::endl;
     //~ 
     std::cout << "-----------------------------------------------" 
-              << std::endl << "Reactions:" << std::endl;
+              << std::endl << "Reactions:\n";
     for (const auto& el : f) std::cout << el << std::endl;
+    
+    std::cout << "-----------------------------------------------" 
+              << std::endl << "Compliance:\n";
+    auto compliance = 0.;
+    for(auto i = 0u; i < f.size(); ++i) compliance += u[i]*f[i];
+    std::cout << compliance << std::endl;
 
     //~ auto element        = decltype(structure)::edge_descriptor(); 
     //~ auto element_exists = false;

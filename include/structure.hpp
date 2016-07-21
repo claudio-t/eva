@@ -182,7 +182,7 @@ struct solver
         // | K_bf  K_bb | | u_b |     | f_b |
         //
         // K := Stiffness matrix
-        // u .= displacement vector
+        // u := displacement vector
         // f := load/reaction vector
         //
         // $_f := Free DOF

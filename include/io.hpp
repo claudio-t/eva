@@ -182,14 +182,15 @@ assign_value_action(const double value, eva::fixed_vector<N,T>& vec, const size_
 {
     vec(idx) = value;
 }
-
-
-
+    
 template<int N, typename T>
 struct lexical_cast_do_cast<eva::fixed_vector<N,T>, std::string>
-{         
-    /// Alias for parser input iterator type
-    using iterator_type = std::string::const_iterator;
+{     
+    void  
+    do_assign(const double value, eva::fixed_vector<N,T>& vec, const size_t idx) 
+    {
+        vec(idx) = value;
+    }
     
     static inline
     eva::fixed_vector<N,T>
@@ -197,19 +198,52 @@ struct lexical_cast_do_cast<eva::fixed_vector<N,T>, std::string>
     {
         namespace qi    = boost::spirit::qi;
         namespace phx   = boost::phoenix;
-        //~ namespace ascii = boost::spirit::ascii;
+        // namespace ascii = boost::spirit::ascii;
         
+        /// Alias for parser input iterator type
+        using iterator_type = std::string::const_iterator;
+        
+        /// Alias for a parser that parses a T
+        auto t_ = qi::real_parser<T>();
+        static_assert(std::is_floating_point<T>::value, 
+                       "Integral types are unsupported yet.");
+        
+        // FIXME! WHY U NOT WORK?!?!?!
+        //~ qi::rule<iterator_type, eva::fixed_vector<N,T>(),
+                 //~ qi::locals<size_t>, qi::blank_type> rule = 
+            //~ qi::eps [ qi::_a = 0 ]
+            //~ > '['
+            //~ > qi::repeat(N-1) [
+                //~ t_[phx::bind(&lexical_cast_do_cast::do_assign, qi::_1, qi::_val, qi::_a++)]
+                //~ >> ',' 
+            //~ ]
+            //~ > t_[phx::bind(&lexical_cast_do_cast::do_assign, qi::_1, qi::_val, qi::_a)]
+            //~ > ']'
+        //~ ;
         qi::rule<iterator_type, eva::fixed_vector<N,T>(),
-                 qi::locals<int>, qi::blank_type> rule = 
+                 qi::locals<size_t>, qi::blank_type> rule = 
             qi::eps [ qi::_a = 0 ]
-            >> '['
-            >> qi::repeat(N-1) [
-                qi::double_[phx::bind(&assign_value_action<N,T>, qi::_1, qi::_val, qi::_a++)]
+            > '['
+            > qi::repeat(N-1) [
+                t_[phx::bind(&assign_value_action<N,T>, qi::_1, qi::_val, qi::_a++)]
                 >> ',' 
             ]
-            >> qi::double_[phx::bind(&assign_value_action<N,T>, qi::_1, qi::_val, qi::_a)]
-            >> ']'
+            > t_[phx::bind(&assign_value_action<N,T>, qi::_1, qi::_val, qi::_a)]
+            > ']'
         ;
+        
+        rule.name("vector rule");
+        qi::on_error<qi::fail>
+        (
+            rule
+          , std::cerr
+                << phx::val("Error! Expecting ")
+                << qi::_4                               // what failed?
+                << phx::val(" here: \"")
+                << phx::construct<std::string>(qi::_3, qi::_2)  // iterators to error-pos, end
+                << phx::val("\"")
+                << std::endl
+        );
                   
         auto ret = eva::fixed_vector<N,T>();
         
@@ -217,38 +251,54 @@ struct lexical_cast_do_cast<eva::fixed_vector<N,T>, std::string>
         
         bool r = phrase_parse(iter, iend, rule, qi::blank, ret);
         
-        //~ if (r && iter == iend) { 
-            //~ std::cout << "Parsing succeded\n";
-        //~ } else {
         if (!r || iter != iend) {
             std::cout << "-------------------------\n";
             std::cout << "Parsing failed\n";
             std::cout << str << std::endl;
-            //~ std::cout << r << "\n" << (iter==iend) << "\n";
             std::cout << "-------------------------\n";
         }
         return ret;
     }
-    /* OLD, UGLY, SLOW
+};
+
+
+template<>
+struct lexical_cast_do_cast<eva::fixed_vector<1, double>, std::string>
+{ 
     static inline
-    eva::fixed_vector<N,T>
+    eva::fixed_vector<1, double>
     lexical_cast_impl(const std::string& str) 
     {
-        auto line = str;                         // Temporary
-        std::istringstream iss (std::move(line));// Move construct istringstream
-        
-        auto vec = eva::fixed_vector<N>();
-        for (auto i = 0; i < N; ++i) {
-            std::string str;
-            iss >> str;
-            // FIXME: what for size_t, int etc..??
-            if (std::is_same<T, double>::value) vec(i) = std::stod(str);
-            if (std::is_same<T,  float>::value) vec(i) = std::stof(str);
-            if (std::is_same<T,    int>::value) vec(i) = std::stoi(str);
-        }
-        return vec;
-    }*/
+        auto ret = eva::fixed_vector<1, double>();
+        ret << std::stod(str);
+        return ret;
+    }
 };
+template<>
+struct lexical_cast_do_cast<eva::fixed_vector<1, float>, std::string>
+{ 
+    static inline
+    eva::fixed_vector<1, float>
+    lexical_cast_impl(const std::string& str) 
+    {
+        auto ret = eva::fixed_vector<1, float>();
+        ret << std::stof(str);
+        return ret;
+    }
+};
+template<>
+struct lexical_cast_do_cast<eva::fixed_vector<1, int>, std::string>
+{ 
+    static inline
+    eva::fixed_vector<1, int>
+    lexical_cast_impl(const std::string& str) 
+    {
+        auto ret = eva::fixed_vector<1, int>();
+        ret << std::stoi(str);
+        return ret;
+    }
+};
+
 } } // end details and boost
 
 # endif //__EVA_IO__
