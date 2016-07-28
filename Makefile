@@ -30,7 +30,7 @@ $(EXEC): $(OBJS)
 	@echo " Linking..."
 	@mkdir -p bin
 	@echo " $(CXX) $^ -o bin/$(EXEC) $(LIBS)"; $(CXX) $^ -o bin/$(EXEC) $(LIBS)
-	
+
 
 $(OBJDIR)/%.o: $(SRCDIR)/%.$(SRCEXT)
 	@mkdir -p $(OBJDIR)
@@ -40,7 +40,7 @@ $(OBJDIR)/%.o: $(SRCDIR)/%.$(SRCEXT)
 clean:
 	@echo " Cleaning..."; 
 	@echo " $(RM) -r $(EXEC)"; $(RM) -r $(EXEC)
-		
+
 distclean:
 	@echo " (Dist)Cleaning..."; 
 	@echo " $(RM) -r $(OBJDIR) $(EXEC)"; $(RM) -r $(OBJDIR) $(EXEC)
@@ -50,5 +50,5 @@ parser:
 	$(CXX) $(CXXFLAGS) tests/test_parser.cpp -o bin/parser $(INCDIRS)
 #~ test_graphviz:
 #~ 	$(CXX) $(CXXFLAGS) tests/test_graphviz.cpp -o tests/graph -lboost_graph
-	
+
 .PHONY: clean distclean test_armadillo

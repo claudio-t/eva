@@ -17,9 +17,6 @@
 # include <eigen3/Eigen/Dense>
 # include <eigen3/Eigen/Sparse>
 
-// eva
-//~ # include "num_array.hpp"
-
 
 namespace eva {
     
@@ -28,10 +25,10 @@ namespace eva {
 //------------------------------------- Aliases and Typedefs -------------------------------------//
 
 /// Alias for type representing a real number
-typedef double real; //using double = real;
+using real = double;
 
 /// Alias for a type representing an index
-typedef size_t index_t;
+using index_t = size_t;
 
 /// Alias for a fixed size vector
 template <int N, typename T = real>
@@ -42,16 +39,16 @@ template <int M, int N, typename T = real>
 using fixed_matrix = Eigen::Matrix<T, M, N>;
 
 /// Alias for a dense matrix used for computation
-typedef Eigen::Matrix<real, Eigen::Dynamic, Eigen::Dynamic> dense_matrix;
+using dense_matrix = Eigen::Matrix<real, Eigen::Dynamic, Eigen::Dynamic>;
 
 /// Alias for a dense vector used for computation
-typedef Eigen::Matrix<real, Eigen::Dynamic, 1> dense_vector;
+using dense_vector = Eigen::Matrix<real, Eigen::Dynamic, 1>;
 
 /// Alias for a sparse matrix used for computation
-typedef Eigen::SparseMatrix<real> sparse_matrix; // Does not work with CRS!
+using sparse_matrix = Eigen::SparseMatrix<real>; // Does not work with CRS!
 
 /// Alias for a sparse vector used for computation (CCS format)
-typedef Eigen::SparseVector<real> sparse_vector;
+using sparse_vector = Eigen::SparseVector<real>;
 
 /// Alias for a generic structure
 template < typename NodeProps, typename EdgeProps, typename Kind >
@@ -61,34 +58,56 @@ using generic_structure = boost::adjacency_list< boost::vecS, boost::vecS, boost
 //----------------------------------- Functors and Functions -------------------------------------//
 
 // -- Post-processing --//
-
+// Get member internal forces
 template <typename Structure> 
-decltype(auto)
+auto
 get_internal_forces(const typename Structure::edge_descriptor& e, const Structure& s, 
                     const std::vector<real>& u, const std::vector<real>& f);
 
+/// Functor that computes member internal forces.
+/// Has to be specialized for every structure type.
 template <typename StructureType> 
 struct internal_forces_getter;
 
-// -- Problem Solving -- //
 
-/// Convenient wrapper for the solver functor
-template <typename Kind/*=void*/, typename Structure> 
-decltype(auto)
-solve(const Structure& s);
+// -- Problem Solving -- //
+/// Specifies the algebra and solver types that the dense solver has to use
+struct dense_solver_params;
+
+/// Specifies the algebra and solver types that the sparse solver has to use
+struct sparse_solver_params;
+
+/// Solves a given problem automatically deducing the structure type
+template <
+    typename Params = sparse_solver_params,
+    typename Kind = void, typename Structure
+    >
+auto
+solve(const Structure& s, Params p = Params());
 
 /// Generic solver functor: has to be specialized for every structure type
-template <typename StructureType> 
+template <typename StructureType, typename Params>
 struct solver;
 
 
-
 // -- Problem Assembling -- //
-/// Builds the system stiffness matrix in global coordinates
-template <typename S>
-std::array<dense_matrix, 3>
+/// Assembles the system stiffness matrix in global coordinates.
+template <typename A, typename S>
+auto
 assemble_stiffness_matrix(const S& s, const std::vector<index_t>& dofmap,
                           const size_t n_f, const size_t n_b);
+
+/// Functor that assembles the system stiffness matrix. 
+/// Has to be specialized for every structure type
+template <typename AlgebraType> 
+struct stiffness_matrix_assembler;
+
+/// Dense algebra tag type
+struct dense_algebra_t  {};
+
+/// Sparse algebra tag type
+struct sparse_algebra_t {};
+
 
 /// Builds the known terms, i.e. the force vector portion related to the free DOF and
 /// the displacement vector portion associated to BC DOF
@@ -96,14 +115,14 @@ template <typename S>
 std::array<dense_vector, 2>
 assemble_known_terms(const S& s, const size_t n_f, const size_t n_b);
 
-/// Assembles the element (local) stiffness matrix. 
+/// Functor that assembles the element (local) stiffness matrix. 
 /// Has to be specialized for every structure type
 template <typename StructureType> 
 struct element_matrix_assembler;
 
-/// Convenient wrapper for the element_matrix_assembler functor
+/// Assembles the element (local) stiffness matrix
 template <typename Structure> 
-decltype(auto)
+auto
 assemble_element_matrix(const typename Structure::edge_descriptor& e, const Structure& s);
 
 /// Functor that assembles the known terms vectors (source term and BCs related DOF).
@@ -161,7 +180,7 @@ struct internal_forces_getter
 };
 
 template <typename S> 
-decltype(auto)
+auto
 get_internal_forces(const typename S::edge_descriptor& e, const S& s, 
                     const std::vector<real>& u, const std::vector<real>& f) 
 {
@@ -170,11 +189,41 @@ get_internal_forces(const typename S::edge_descriptor& e, const S& s,
 
       
 // -- Problem Solving -- //
-template <typename StructureType>
+template <typename Params, typename Kind, typename Structure>
+auto
+solve(const Structure& s, Params p) 
+{
+    // If Kind is void use Structure kind, else directly use Kind
+    using kind_t = typename std::conditional< 
+        std::is_void<Kind>::value, 
+        typename Structure::graph_bundled, Kind
+        >::type;
+                    
+    return solver<kind_t, Params>()(s);
+}
+
+struct dense_solver_params 
+{
+    using algebra_t = dense_algebra_t;
+    using  solver_t = Eigen::LDLT<dense_matrix>;
+};
+
+
+struct sparse_solver_params 
+{
+    using algebra_t = sparse_algebra_t;
+    using  solver_t = Eigen::ConjugateGradient<sparse_matrix>;
+};
+
+template <typename StructureType, typename Params>
 struct solver 
 {    
+    using algebra_t = typename Params::algebra_t;
+    using  solver_t = typename  Params::solver_t;
+    
     template <class S>
-    decltype(auto) operator()(const S& s) 
+    auto
+    operator()(const S& s) 
     {
         // Assemble system: K*u = f
         // 
@@ -198,17 +247,10 @@ struct solver
         //
         
         // Assemble system stiffness matrices (in global coordinates)
-        auto matrices = assemble_stiffness_matrix_sp(s, dofmap, n_f, n_b);
+        auto matrices = assemble_stiffness_matrix<algebra_t>(s, dofmap, n_f, n_b);
         const auto& K_ff = std::get<0>(matrices);
         const auto& K_fb = std::get<1>(matrices);
         const auto& K_bb = std::get<2>(matrices);
-        
-        //~ std::cout << std::endl
-                  //~ << "------------------------ K_ff ------------------------"
-                  //~ << std::endl
-                  //~ << K_ff
-                  //~ << std::endl
-                  //~ << std::endl;
         //~ const sparse_matrix K_ff = std::get<0>(matrices).sparseView();
         //~ const sparse_matrix K_fb = std::get<1>(matrices).sparseView();
         //~ const sparse_matrix K_bb = std::get<2>(matrices).sparseView();
@@ -229,9 +271,7 @@ struct solver
         //
         // Solve condensed system:
         // K_ff * u_f = f_f - K_fb * u_b
-        //~ Eigen::LDLT<dense_matrix> eigen_solver(K_ff);        
-        //~ Eigen::SimplicialLLT<sparse_matrix> eigen_solver(K_ff);
-        Eigen::ConjugateGradient<sparse_matrix> eigen_solver(K_ff);
+        solver_t eigen_solver(K_ff);
         auto u_f = eigen_solver.solve(f_f - K_fb * u_b);
         
         // Timing
@@ -254,23 +294,14 @@ struct solver
 };
 
 
-template <typename Kind = void, typename Structure> 
-decltype(auto)
-solve(const Structure& s) 
+// -- Problem Assembling -- //
+template <typename S> 
+auto
+assemble_element_matrix(const typename S::edge_descriptor& e, const S& s) 
 {
-    // Se Tag è void usa la print_tag di T, altrimenti usa direttamente Tag
-    // If Kind is void use Structure kind, else directly use Kind
-    using kind_t = typename std::conditional< 
-                        std::is_void<Kind>::value, 
-                        typename Structure::graph_bundled, Kind
-                    >::type;
-                    
-    return solver<kind_t>()(s);
+    return element_matrix_assembler<typename S::graph_bundled>()(e, s);
 }
 
-
-
-// -- Problem Assembling -- //
 template <typename StructureType> 
 struct element_matrix_assembler 
 {
@@ -282,13 +313,13 @@ struct element_matrix_assembler
     }
 };
 
-template <typename S> 
-decltype(auto)
-assemble_element_matrix(const typename S::edge_descriptor& e, const S& s) 
-{
-    return element_matrix_assembler<typename S::graph_bundled>()(e, s);
-}
 
+template <typename S>
+std::array<dense_vector, 2>
+assemble_known_terms(const S& s, const size_t n_f, const size_t n_b) 
+{
+    return known_terms_assembler<typename S::graph_bundled>()(s, n_f, n_b);
+}
 
 template <typename StructureType>
 struct known_terms_assembler 
@@ -302,200 +333,234 @@ struct known_terms_assembler
     }
 };
 
-template <typename S>
-std::array<dense_vector, 2>
-assemble_known_terms(const S& s, const size_t n_f, const size_t n_b) 
-{
-    return known_terms_assembler<typename S::graph_bundled>()(s, n_f, n_b);
-}
 
-
-template <typename S>
-std::array<dense_matrix, 3>
+template <typename A, typename S>
+auto
 assemble_stiffness_matrix(const S& s, const std::vector<index_t>& dofmap,
                           const size_t n_f, const size_t n_b) 
 {
-    const static size_t dim = S::graph_bundled::ndof;
-    
-    // Init SYSTEM SUB-matrices
-    auto matrices = std::array<dense_matrix, 3> { dense_matrix::Zero(n_f, n_f),
-                                                  dense_matrix::Zero(n_f, n_b),
-                                                  dense_matrix::Zero(n_b, n_b) };
-    
-    auto& K_ff = std::get<0>(matrices);
-    auto& K_fb = std::get<1>(matrices);
-    auto& K_bb = std::get<2>(matrices);
-    
-    // Loop over all edges
-    for (auto&& e : make_iterator_range(edges(s))) {
-        
-        // Get node indexes
-        auto na = source(e, s);
-        auto nb = target(e, s);
-        
-        // Build local to global DOF map
-        auto loc_to_glob = build_local_to_global_dofmap<dim>(na, nb, dofmap);
-                
-        // Get ELEMENT stiffness matrix in GLOBAL coordinates
-        auto K_e = assemble_element_matrix(e, s);
-        
-        // Compose SYSTEM submatrices
-        for (size_t i = 0; i < 2*dim; ++i)
-            for (size_t j = 0; j < 2*dim; ++j) {
-                
-                auto ii = loc_to_glob(i);
-                auto jj = loc_to_glob(j);
-                
-                switch((ii < n_f) + 2*(jj < n_f)) {
-                    
-                    case 0 : K_bb(ii-n_f, jj-n_f) += K_e(i, j); break;
-                    
-                    case 1 : K_fb(ii, jj-n_f) += K_e(i, j);     break;
-                    
-                    case 2 : /* Does nothing (no K_bf)  */      break;
-                    
-                    case 3 : K_ff(ii, jj) += K_e(i, j);         break;
-                }
-            }
-    }
-    // FIXME: Check for NRVO! (should work)
-    return matrices;
+    return stiffness_matrix_assembler<A>()(s, dofmap, n_f, n_b);
 }
 
-
-template <typename S>
-std::array<sparse_matrix, 3>
-assemble_stiffness_matrix_sp(const S& s, const std::vector<index_t>& dofmap,
-                             const size_t n_f, const size_t n_b) 
-{    
-    const static size_t dim = S::graph_bundled::ndof; 
-        
-    // Compute number of non-zero entries for each matrix
-    auto nnzs = count_nnz_entries(s, dofmap, n_f, n_b);
-    const auto& nnz_ff = std::get<0>(nnzs);
-    const auto& nnz_fb = std::get<1>(nnzs);
-    const auto& nnz_bb = std::get<2>(nnzs);
-    
-    // Init submatrices
-    auto matrices = std::array<sparse_matrix, 3> { sparse_matrix(n_f, n_f), 
-                                                   sparse_matrix(n_f, n_b), 
-                                                   sparse_matrix(n_b, n_b) }; 
-    // Reserve exactly the required space
-    for (size_t idx = 0u; idx < dim; ++idx) matrices[idx].reserve(nnzs[idx]);
-        
-    auto& K_ff = std::get<0>(matrices); 
-    auto& K_fb = std::get<1>(matrices);
-    auto& K_bb = std::get<2>(matrices);
-    
-    // Loop over all edges
-    for (auto&& e : make_iterator_range(edges(s))) {
-        
-        // Get node indexes
-        auto na = source(e, s);
-        auto nb = target(e, s);
-        
-        // Build local to global DOF map
-        auto loc_to_glob = build_local_to_global_dofmap<dim>(na, nb, dofmap);
-                
-        // Get ELEMENT stiffness matrix in GLOBAL coordinates
-        auto K_e = assemble_element_matrix(e, s);
-    
-        // Compose SYSTEM submatrices
-        for (size_t i = 0; i < 2*dim; ++i)
-            for (size_t j = 0; j < 2*dim; ++j) {
-                
-                auto ii = loc_to_glob(i);
-                auto jj = loc_to_glob(j);
-                
-                switch((ii < n_f) + 2*(jj < n_f)) {
-                    
-                    case 0: K_bb.coeffRef(ii-n_f, jj-n_f) += K_e(i, j); break;
-                    
-                    case 1: K_fb.coeffRef(ii, jj-n_f) += K_e(i, j);     break;
-                    
-                    case 2: /* Does nothing (no K_bf)  */               break;
-        
-                    case 3: K_ff.coeffRef(ii, jj) += K_e(i, j);         break;
-                }
-            }
-    }
-    // Compress, then return matrices (K_ff, K_fb, K_bb)
-    for (size_t idx = 0u; idx < dim; ++idx) matrices[idx].makeCompressed();
-    
-    return matrices;
-}
-template <typename S>
-std::array<sparse_matrix, 3>
-assemble_stiffness_matrix_sp2(const S& s, const std::vector<index_t>& dofmap,
-                              const size_t n_f, const size_t n_b) 
+template <typename AlgebraType>
+struct stiffness_matrix_assembler
 {
-    const static size_t dim = S::graph_bundled::ndof; 
-    
-    // Compute number of non-zero entries for each matrix
-    auto nnzs = count_nnz_entries(s, dofmap, n_f, n_b);
-    
-    std::array<size_t, 3> nnz_tot {std::accumulate(begin(nnzs[0]), end(nnzs[0]), 0u),
-                                   std::accumulate(begin(nnzs[1]), end(nnzs[1]), 0u), 
-                                   std::accumulate(begin(nnzs[2]), end(nnzs[2]), 0u)};
-    
-    // Allocate Triplet lists reserving the required space
-    auto triplet_lists = std::array<std::vector<Eigen::Triplet<real>>, 3> ();
-    for (size_t idx = 0u; idx < 3u; ++idx) 
-        triplet_lists[idx].reserve(nnz_tot[idx]);
+    template <typename S>
+    void
+    operator()(const S& s, const std::vector<index_t>& dofmap,
+                             const size_t n_f, const size_t n_b)
+    {
+        static_assert(
+            std::is_same<S,S>::value, 
+            "Algebra type must be either dense_algebra_t or sparse_algebra_t"
+        );
+    }
+};
+
+template <>
+struct stiffness_matrix_assembler<dense_algebra_t>
+{
+    template <typename S>
+    std::array<dense_matrix, 3>
+    operator()(const S& s, const std::vector<index_t>& dofmap,
+                             const size_t n_f, const size_t n_b)
+    {
+        const static size_t dim = S::graph_bundled::ndof;
         
-    auto& K_ff_list = std::get<0>(triplet_lists); 
-    auto& K_fb_list = std::get<1>(triplet_lists);
-    auto& K_bb_list = std::get<2>(triplet_lists);
-    
-    
-    // Loop over all edges
-    for (auto&& e : make_iterator_range(edges(s))) {
+        // Init SYSTEM SUB-matrices
+        auto matrices = std::array<dense_matrix, 3> {
+            dense_matrix::Zero(n_f, n_f),
+            dense_matrix::Zero(n_f, n_b),
+            dense_matrix::Zero(n_b, n_b)};
         
-        // Get node indexes
-        auto na = source(e, s);
-        auto nb = target(e, s);
+        auto& K_ff = std::get<0>(matrices);
+        auto& K_fb = std::get<1>(matrices);
+        auto& K_bb = std::get<2>(matrices);
         
-        // Build local to global DOF map
-        auto loc_to_glob = build_local_to_global_dofmap<dim>(na, nb, dofmap);
-                
-        // Get ELEMENT stiffness matrix in GLOBAL coordinates
-        auto K_e = assemble_element_matrix(e, s);
-    
-        // Compose SYSTEM submatrices
-        for (size_t i = 0; i < 2*dim; ++i)
-            for (size_t j = 0; j < 2*dim; ++j) {
-                
-                auto ii = loc_to_glob(i);
-                auto jj = loc_to_glob(j);
-                
-                switch((ii < n_f) + 2*(jj < n_f)) {
+        // Loop over all edges
+        for (auto&& e : make_iterator_range(edges(s))) {
+            
+            // Get node indexes
+            auto na = source(e, s);
+            auto nb = target(e, s);
+            
+            // Build local to global DOF map
+            auto loc_to_glob = build_local_to_global_dofmap<dim>(na, nb, dofmap);
                     
-                    case 0 /*K_bb*/: K_bb_list.emplace_back(ii-n_f, jj-n_f, K_e(i, j)); break;
+            // Get ELEMENT stiffness matrix in GLOBAL coordinates
+            auto K_e = assemble_element_matrix(e, s);
+            
+            // Compose SYSTEM submatrices
+            for (size_t i = 0; i < 2*dim; ++i)
+                for (size_t j = 0; j < 2*dim; ++j) {
                     
-                    case 1 /*K_fb*/: K_fb_list.emplace_back(ii, jj-n_f, K_e(i, j));     break;
+                    auto ii = loc_to_glob(i);
+                    auto jj = loc_to_glob(j);
                     
-                    case 2 /*K_bf*/: /* Does nothing (no K_bf)  */                      break;
-        
-                    case 3 /*K_ff*/: K_ff_list.emplace_back(ii, jj, K_e(i, j));         break;
+                    switch((ii < n_f) + 2*(jj < n_f)) {
+                        
+                        case 0 : K_bb(ii-n_f, jj-n_f) += K_e(i, j); break;
+                        
+                        case 1 : K_fb(ii, jj-n_f) += K_e(i, j);     break;
+                        
+                        case 2 : /* Does nothing (no K_bf)  */      break;
+                        
+                        case 3 : K_ff(ii, jj) += K_e(i, j);         break;
+                    }
                 }
-            }
+        }
+        // FIXME: Check for NRVO! (should work)
+        return matrices;
+    }
+};
+
+template <>
+struct stiffness_matrix_assembler<sparse_algebra_t>
+{
+    template <typename S>
+    std::array<sparse_matrix, 3>
+    operator()(const S& s, const std::vector<index_t>& dofmap,
+                             const size_t n_f, const size_t n_b)
+    {
+        return triplets_impl(s, dofmap, n_f, n_b);
+        //~ return matrices_impl(s, dofmap, n_f, n_b);
     }
     
-    // Allocate empty submatrices reserving the required space
-    auto matrices = std::array<sparse_matrix, 3> { sparse_matrix(n_f, n_f), 
-                                                   sparse_matrix(n_f, n_b), 
-                                                   sparse_matrix(n_b, n_b) }; 
+    template <typename S>
+    std::array<sparse_matrix, 3>
+    triplets_impl(const S& s, const std::vector<index_t>& dofmap,
+                 const size_t n_f, const size_t n_b)
+    {
+        const static size_t dim = S::graph_bundled::ndof; 
+        
+        // Compute number of non-zero entries for each matrix
+        auto nnzs = count_nnz_entries(s, dofmap, n_f, n_b);
+        
+        std::array<size_t, 3> nnz_tot {
+            std::accumulate(begin(nnzs[0]), end(nnzs[0]), 0u),
+            std::accumulate(begin(nnzs[1]), end(nnzs[1]), 0u),
+            std::accumulate(begin(nnzs[2]), end(nnzs[2]), 0u)};
+        
+        // Allocate Triplet lists reserving the required space
+        auto triplet_lists = std::array<std::vector<Eigen::Triplet<real>>, 3> ();
+        for (size_t idx = 0u; idx < 3u; ++idx) 
+            triplet_lists[idx].reserve(nnz_tot[idx]);
+            
+        auto& K_ff_list = std::get<0>(triplet_lists); 
+        auto& K_fb_list = std::get<1>(triplet_lists);
+        auto& K_bb_list = std::get<2>(triplet_lists);
+        
+        
+        // Loop over all edges
+        for (auto&& e : make_iterator_range(edges(s))) {
+            
+            // Get node indexes
+            auto na = source(e, s);
+            auto nb = target(e, s);
+            
+            // Build local to global DOF map
+            auto loc_to_glob = build_local_to_global_dofmap<dim>(na, nb, dofmap);
+                    
+            // Get ELEMENT stiffness matrix in GLOBAL coordinates
+            auto K_e = assemble_element_matrix(e, s);
+        
+            // Compose SYSTEM submatrices
+            for (size_t i = 0; i < 2*dim; ++i)
+                for (size_t j = 0; j < 2*dim; ++j) {
+                    
+                    auto ii = loc_to_glob(i);
+                    auto jj = loc_to_glob(j);
+                    
+                    switch((ii < n_f) + 2*(jj < n_f)) {
+                        
+                        case 0 /*K_bb*/: K_bb_list.emplace_back(ii-n_f, jj-n_f, K_e(i, j)); break;
+                        
+                        case 1 /*K_fb*/: K_fb_list.emplace_back(ii, jj-n_f, K_e(i, j));     break;
+                        
+                        case 2 /*K_bf*/: /* Does nothing (no K_bf)  */                      break;
+            
+                        case 3 /*K_ff*/: K_ff_list.emplace_back(ii, jj, K_e(i, j));         break;
+                    }
+                }
+        }
+        
+        // Allocate empty submatrices reserving the required space
+        auto matrices = std::array<sparse_matrix, 3> {
+            sparse_matrix(n_f, n_f),
+            sparse_matrix(n_f, n_b),
+            sparse_matrix(n_b, n_b)}; 
 
+        
+        for (size_t idx = 0u; idx < dim; ++idx)
+            matrices[idx].setFromTriplets(triplet_lists[idx].begin(), triplet_lists[idx].end());
+        
+        // Compress, then return matrices (K_ff, K_fb, K_bb)
+        for (size_t idx = 0u; idx < dim; ++idx) matrices[idx].makeCompressed();
+        
+        return matrices;
+    }
     
-    for (size_t idx = 0u; idx < dim; ++idx)
-        matrices[idx].setFromTriplets(triplet_lists[idx].begin(), triplet_lists[idx].end());
-    
-    // Compress, then return matrices (K_ff, K_fb, K_bb)
-    for (size_t idx = 0u; idx < dim; ++idx) matrices[idx].makeCompressed();
-    
-    return matrices;
-}
-
+    template <typename S>
+    std::array<sparse_matrix, 3>
+    matrices_impl(const S& s, const std::vector<index_t>& dofmap,
+                  const size_t n_f, const size_t n_b)
+    {    
+        const static size_t dim = S::graph_bundled::ndof; 
+            
+        // Compute number of non-zero entries for each matrix
+        auto nnzs = count_nnz_entries(s, dofmap, n_f, n_b);
+        
+        // Init submatrices
+        auto matrices = std::array<sparse_matrix, 3> {
+            sparse_matrix(n_f, n_f), 
+            sparse_matrix(n_f, n_b), 
+            sparse_matrix(n_b, n_b) }; 
+        // Reserve exactly the required space
+        for (size_t idx = 0u; idx < dim; ++idx) 
+            matrices[idx].reserve(nnzs[idx]);
+            
+        auto& K_ff = std::get<0>(matrices); 
+        auto& K_fb = std::get<1>(matrices);
+        auto& K_bb = std::get<2>(matrices);
+        
+        // Loop over all edges
+        for (auto&& e : make_iterator_range(edges(s))) {
+            
+            // Get node indexes
+            auto na = source(e, s);
+            auto nb = target(e, s);
+            
+            // Build local to global DOF map
+            auto loc_to_glob = build_local_to_global_dofmap<dim>(na, nb, dofmap);
+                    
+            // Get ELEMENT stiffness matrix in GLOBAL coordinates
+            auto K_e = assemble_element_matrix(e, s);
+        
+            // Compose SYSTEM submatrices
+            for (size_t i = 0; i < 2*dim; ++i)
+                for (size_t j = 0; j < 2*dim; ++j) {
+                    
+                    auto ii = loc_to_glob(i);
+                    auto jj = loc_to_glob(j);
+                    
+                    switch((ii < n_f) + 2*(jj < n_f)) {
+                        
+                        case 0: K_bb.coeffRef(ii-n_f, jj-n_f) += K_e(i, j); break;
+                        
+                        case 1: K_fb.coeffRef(ii, jj-n_f) += K_e(i, j);     break;
+                        
+                        case 2: /* Does nothing (no K_bf)  */               break;
+            
+                        case 3: K_ff.coeffRef(ii, jj) += K_e(i, j);         break;
+                    }
+                }
+        }
+        // Compress, then return matrices (K_ff, K_fb, K_bb)
+        for (size_t idx = 0u; idx < dim; ++idx) matrices[idx].makeCompressed();
+        
+        return matrices;
+    }
+};
 
  
 // -- DOF Handling -- //
@@ -519,9 +584,10 @@ build_global_dofmap(const S& s)
         
         for (size_t i = 0u; i < dim; ++i) {
             // If coordinate = NaN => Free DOF else BC DOF
-            if (std::isnan(bcs[i]))
+            if (std::isnan(bcs[i])) {
                 // Put DOF at the beginning
                 dofmap[dim*v+i] = ff_pos++;
+            }
             else {
                 // Put DOF at the end and increment counter
                 dofmap[dim*v+i] = bc_pos--;
@@ -543,9 +609,10 @@ count_nnz_entries(const S& s, const std::vector<index_t>& dofmap,
     const static size_t dim = S::graph_bundled::ndof;
     
     // Init return variables
-    auto ret = std::array<std::vector<size_t>, 3> {std::vector<size_t>(n_f),
-                                                   std::vector<size_t>(n_f), 
-                                                   std::vector<size_t>(n_b)};
+    auto ret = std::array<std::vector<size_t>, 3> {
+        std::vector<size_t>(n_f),
+        std::vector<size_t>(n_f), 
+        std::vector<size_t>(n_b)};
     auto& nnz_ff = std::get<0>(ret);    // #(non-zero entries) of K_ff rows
     auto& nnz_fb = std::get<1>(ret);    // #(non-zero entries) of K_fb rows
     auto& nnz_bb = std::get<2>(ret);    // #(non-zero entries) of K_bb rows
@@ -561,9 +628,9 @@ count_nnz_entries(const S& s, const std::vector<index_t>& dofmap,
         // Loop on current vertex DOF
         for (size_t i = 0u; i < dim; ++i) {
             // If nan =>  BC DOF  => increase bc non-zero entries count 
-            if(std::isnan(dofs[i])) ++nr_b;
+            if (std::isnan(dofs[i])) ++nr_b;
             //  Else  => free DOF => increase free non-zero entries count
-            else                   ++nr_f;
+            else                    ++nr_f;
         }
         
         // Loop on neighbour nodes and do the same thing for each one of them
@@ -573,9 +640,9 @@ count_nnz_entries(const S& s, const std::vector<index_t>& dofmap,
             // Loop on bcs
             for (size_t j = 0u; j < dim; ++j) {
                 // If nan =>  BC DOF  => increase bc non-zero entries count 
-                if(std::isnan(bcs[j])) ++nr_b;
+                if (std::isnan(bcs[j])) ++nr_b;
                 //  Else  => free DOF => increase free non-zero entries count
-                else                   ++nr_f;
+                else                    ++nr_f;
             }
         }
         
@@ -587,7 +654,8 @@ count_nnz_entries(const S& s, const std::vector<index_t>& dofmap,
                 nnz_ff[ii] = nr_f;
                 nnz_fb[ii] = nr_b;
                 
-            } else {
+            }
+            else {
                 // Write #(nnz entries) of K_ff and K_fb
                 nnz_bb[ii-n_f] = nr_b;
                 //nnz_bf[ii-nf] = nr_f;

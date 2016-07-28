@@ -28,10 +28,10 @@ template <int N> struct frame_type
 
 //--------------------------------- 2/3-D truss typedefs -----------------------------------------//
 /// 2-dimensional frame structure type
-typedef generic_structure<frame_joint<2>, frame_element<2>, frame_type<2>> frame2d; 
+using frame2d = generic_structure<frame_joint<2>, frame_element<2>, frame_type<2>>;
 
 /// 3-dimensional frame structure type
-typedef generic_structure<frame_joint<3>, frame_element<3>, frame_type<3>> frame3d; 
+using frame3d = generic_structure<frame_joint<3>, frame_element<3>, frame_type<3>>;
 
 //----------------------------------- Functors and Functions -------------------------------------//
 // -- Problem Assembling -- //
@@ -66,17 +66,17 @@ template <int N> struct frame_joint
     /// Default constructor. Initializes coords to zero,
     /// load to zero, torque to zero and bcs to nan
     frame_joint()
-    : coords(fixed_vector<N>::Zero()) 
-    , load  (fixed_vector<N>::Zero())
-    , torque(fixed_vector<2*N-3>::Zero())
-    , bcs   (fixed_vector<3*(N-1)>::Constant(std::numeric_limits<real>::quiet_NaN()))
-    {}
+        : coords(fixed_vector<N>::Zero()) 
+        , load  (fixed_vector<N>::Zero())
+        , torque(fixed_vector<2*N-3>::Zero())
+        , bcs   (fixed_vector<3*(N-1)>::Constant(std::numeric_limits<real>::quiet_NaN()))
+        {}
 };
 
 
 template <> struct frame_element<2> 
 {    
-    real E; ///< Young's modulus       [GPa]
+    real E; ///< Young's modulus       [Pa]
     
     real A; ///< Cross sectional area  [m^2]
     
@@ -121,7 +121,7 @@ struct element_matrix_assembler<frame_type<2>>
         auto b  = structure[nb].coords;             // Node B coordinates
         
         // Compute truss length, sine and cosine
-        real L = sqrt((b[0]-a[0])*(b[0]-a[0]) + (b[1]-a[1])*(b[1]-a[1]));
+        real L = (a-b).norm();
         real c = (b[0]-a[0]) / L;
         real s = (b[1]-a[1]) / L;
         
@@ -178,7 +178,7 @@ struct element_matrix_assembler<frame_type<3>>
         auto b  = structure[nb].coords;     // Node B coordinates
         
         // Compute truss length, sine and cosine
-        real L = sqrt((b[0]-a[0])*(b[0]-a[0]) + (b[1]-a[1])*(b[1]-a[1]));
+        real L = (a-b).norm();
         real c = (b[0]-a[0]) / L;
         real s = (b[1]-a[1]) / L;
         
@@ -245,19 +245,10 @@ struct known_terms_assembler<frame_type<N>>
             const auto& load   = s[v].load;
             const auto& torque = s[v].torque;
             
-            // Source term storage for DOF associated with vertex v
+            // Source term storage for DOF associated with vertex v:
+            // concatenate load and torque
             auto rhs_v = fixed_vector<ndof>();
             rhs_v << load, torque;
-            
-            //~ // Store LOAD components
-            //~ const auto l_size = load.size();
-            //~ for (size_t i = 0u; i < l_size; ++i) 
-                //~ rhs_v(i) = load(i);
-            //~ 
-            //~ // Store TORQUE components
-            //~ const auto t_size = torque.size();
-            //~ for (size_t i = 0u; i < t_size; ++i) 
-                //~ rhs_v(i+l_size) = torque(i);
             
             // Compute equivalent load configuration for 
             // a distributed load a/o a concentrated load

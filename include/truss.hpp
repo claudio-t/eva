@@ -30,22 +30,20 @@ template <int N> struct truss_type
 
 //--------------------------------- 2/3-D Truss Typedefs -----------------------------------------//
 /// 2-dimensional truss structure type
-typedef generic_structure<truss_joint<2>, truss_element<2>, truss_type<2>> truss2d; 
-
+using truss2d = generic_structure<truss_joint<2>, truss_element<2>, truss_type<2>>;
+    
 /// 3-dimensional truss structure type
-typedef generic_structure<truss_joint<3>, truss_element<3>, truss_type<3>> truss3d; 
+using truss3d = generic_structure<truss_joint<3>, truss_element<3>, truss_type<3>>; 
 
 
 
 //----------------------------------- Functors and Functions -------------------------------------//
 
 // -- Post-processing --//
-
 template <int N> 
 struct internal_forces_getter<truss_type<N>>;
 
 // -- Problem Assembling -- //
-
 /// Specializes element_matrix_assembler functor for a 2D trusses
 template <>
 struct element_matrix_assembler<truss_type<2>>;
@@ -73,10 +71,10 @@ template <int N> struct truss_joint
     /// Default constructor. Initializes
     /// coords to zero, load to zero and bcs to nan
     truss_joint()
-    : coords(fixed_vector<N>::Zero()) 
-    , load  (fixed_vector<N>::Zero())
-    , bcs   (fixed_vector<N>::Constant(std::numeric_limits<real>::quiet_NaN()))
-    {}
+        : coords(fixed_vector<N>::Zero()) 
+        , load  (fixed_vector<N>::Zero())
+        , bcs   (fixed_vector<N>::Constant(std::numeric_limits<real>::quiet_NaN()))
+        {}
 };
 
 
@@ -167,7 +165,7 @@ struct element_matrix_assembler<truss_type<2>>
         const auto b  = s[nb].coords;     // Node B coordinates
         
         // Compute truss length, sine and cosine
-        real L  = sqrt((b[0]-a[0])*(b[0]-a[0]) + (b[1]-a[1])*(b[1]-a[1]));
+        real L  = (a-b).norm();
         real cc = (b[0]-a[0]) / L;
         real ss = (b[1]-a[1]) / L;
         
@@ -204,7 +202,7 @@ struct element_matrix_assembler<truss_type<3>>
         const auto a  = s[na].coords;     // Node A coordinates
         const auto b  = s[nb].coords;     // Node B coordinates
         
-        real L  = sqrt((b[0]-a[0])*(b[0]-a[0]) + (b[1]-a[1])*(b[1]-a[1]) + (b[2]-a[2])*(b[2]-a[2]));
+        real L  = (a-b).norm();
         real cc = sqrt(EA)/L; 
         
         // Compute EA / L * cosine(theta_x/y/z) 

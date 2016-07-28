@@ -220,23 +220,24 @@ struct lexical_cast_do_cast<eva::fixed_vector<N,T>, std::string>
             //~ > t_[phx::bind(&lexical_cast_do_cast::do_assign, qi::_1, qi::_val, qi::_a)]
             //~ > ']'
         //~ ;
-        qi::rule<iterator_type, eva::fixed_vector<N,T>(),
-                 qi::locals<size_t>, qi::blank_type> rule = 
+        qi::rule<
+            iterator_type, eva::fixed_vector<N,T>(),
+            qi::locals<size_t>, qi::blank_type
+            > rule = 
             qi::eps [ qi::_a = 0 ]
             > '['
             > qi::repeat(N-1) [
                 t_[phx::bind(&assign_value_action<N,T>, qi::_1, qi::_val, qi::_a++)]
-                >> ',' 
+                > ',' 
             ]
             > t_[phx::bind(&assign_value_action<N,T>, qi::_1, qi::_val, qi::_a)]
             > ']'
         ;
         
         rule.name("vector rule");
-        qi::on_error<qi::fail>
-        (
-            rule
-          , std::cerr
+        qi::on_error<qi::fail> (
+            rule,
+            std::cerr
                 << phx::val("Error! Expecting ")
                 << qi::_4                               // what failed?
                 << phx::val(" here: \"")
