@@ -71,15 +71,29 @@ struct internal_forces_getter;
 
 
 // -- Problem Solving -- //
-/// Specifies the algebra and solver types that the dense solver has to use
-struct dense_solver_params;
+/// Specifies the algebra (dense/sparse) and solver (see Eigen docs) types that have to be used
+template <typename Algebra, typename Solver>
+struct solver_params;
+
+/// Dense algebra tag type
+struct dense_algebra_t  {};
+
+/// Sparse algebra tag type
+struct sparse_algebra_t {};
+
+/// Default settings for a dense solver
+template <typename S = Eigen::LDLT<dense_matrix> >
+using dense_solver_params = solver_params<dense_algebra_t, S>;
+// struct dense_solver_params;
 
 /// Specifies the algebra and solver types that the sparse solver has to use
-struct sparse_solver_params;
+template <typename S = Eigen::ConjugateGradient<sparse_matrix> >
+using sparse_solver_params = solver_params<sparse_algebra_t, S>;
+// struct sparse_solver_params;
 
 /// Solves a given problem automatically deducing the structure type
 template <
-    typename Params = sparse_solver_params,
+    typename Params = sparse_solver_params<>,
     typename Kind = void, typename Structure
     >
 auto
@@ -101,13 +115,6 @@ assemble_stiffness_matrix(const S& s, const std::vector<index_t>& dofmap,
 /// Has to be specialized for every structure type
 template <typename AlgebraType> 
 struct stiffness_matrix_assembler;
-
-/// Dense algebra tag type
-struct dense_algebra_t  {};
-
-/// Sparse algebra tag type
-struct sparse_algebra_t {};
-
 
 /// Builds the known terms, i.e. the force vector portion related to the free DOF and
 /// the displacement vector portion associated to BC DOF
@@ -202,18 +209,24 @@ solve(const Structure& s, Params p)
     return solver<kind_t, Params>()(s);
 }
 
-struct dense_solver_params 
+template <typename A, typename S>
+struct solver_params
 {
-    using algebra_t = dense_algebra_t;
-    using  solver_t = Eigen::LDLT<dense_matrix>;
+    using algebra_t = A;
+    using solver_t  = S;
 };
+// struct dense_solver_params 
+// {
+//     using algebra_t = dense_algebra_t;
+//     using  solver_t = Eigen::LDLT<dense_matrix>;
+// };
 
 
-struct sparse_solver_params 
-{
-    using algebra_t = sparse_algebra_t;
-    using  solver_t = Eigen::ConjugateGradient<sparse_matrix>;
-};
+// struct sparse_solver_params 
+// {
+//     using algebra_t = sparse_algebra_t;
+//     using  solver_t = Eigen::ConjugateGradient<sparse_matrix>;
+// };
 
 template <typename StructureType, typename Params>
 struct solver 
