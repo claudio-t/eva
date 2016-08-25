@@ -73,6 +73,16 @@ class joint_properties_writer;
 template <typename Structure, int N>
 class joint_properties_writer<Structure, truss_joint<N>>;
 
+/// Specialization for writing a 2D frame joint
+template <typename Structure>
+class joint_properties_writer<Structure, frame_joint<2>>;
+
+/// Utility function for pretty printing a fixed vector
+template <int N> std::string
+to_string(
+    const fixed_vector<N>& v,
+    const std::string lx_delim = "[",
+    const std::string rx_delim = "]");
 
 
 
@@ -225,44 +235,78 @@ public:
           bcs_list_   (get(&props::bcs,    s))
         {}
     
-    joint_properties_writer(const property_map_t<fixed_vector<N> >& coords_list,
-                            const property_map_t<fixed_vector<N> >& load_list,
-                            const property_map_t<fixed_vector<N> >& bcs_list)
-        : coords_list_(coords_list),
-          loads_list_ (load_list),
-          bcs_list_   (bcs_list)
-        {}
-    
     template <class Vertex>
     void operator()(std::ostream& os, const Vertex& v) const
     {
         os << '['
-           << "coords = \"" << this->to_string(coords_list_[v]) << "\", " 
-           << "load = \""   << this->to_string(loads_list_[v])  << "\", "
-           << "bcs = \""    << this->to_string(bcs_list_[v])    << "\", "
-           << "pos = \""    << this->to_string(coords_list_[v], "", "") << "!\"" 
+           << "coords = \"" << to_string(coords_list_[v]) << "\", " 
+           << "load = \""   << to_string(loads_list_[v])  << "\", "
+           << "bcs = \""    << to_string(bcs_list_[v])    << "\", "
+           // << "pos = \""    << to_string(coords_list_[v], "", "") << "!\"" 
            << ']';
-    }
-
-    std::string to_string(const fixed_vector<N>& v,
-                          const std::string lx_delim = "[",
-                          const std::string rx_delim = "]") const
-    {
-        std::ostringstream oss;
-        oss << lx_delim;
-        for(auto i = 0u; i < N-1; ++i) oss << v[i] << ", ";
-        oss << v[N-1];
-        // oss << v.transpose();
-        oss << rx_delim;
-
-        return oss.str();
     }
     
 private:
     const property_map_t<fixed_vector<N> > coords_list_;
-    const property_map_t<fixed_vector<N> > loads_list_;
-    const property_map_t<fixed_vector<N> > bcs_list_;
+    const property_map_t<fixed_vector<N> >  loads_list_;
+    const property_map_t<fixed_vector<N> >    bcs_list_;
 };
+
+template <typename Structure>
+class joint_properties_writer<Structure, frame_joint<2> >
+{
+public:
+    using props = typename Structure::vertex_bundled;
+
+    template <typename P>
+    using property_map_t = boost::vec_adj_list_vertex_property_map<
+        Structure, const Structure *,
+        P, const P&,
+        P eva::frame_joint<2>::*
+        >;
+
+    /// Constructor that initializes member data
+    joint_properties_writer(const Structure& s)
+        : coords_list_ (get(&props::coords, s)),
+          loads_list_  (get(&props::load,   s)),
+          bcs_list_    (get(&props::bcs,    s)),
+          torques_list_(get(&props::torque, s))
+        {}
+
+    /// Actual functor implementation
+    template <class Vertex>
+    void operator()(std::ostream& os, const Vertex& v) const
+    {
+        os << '['
+           << "coords = \"" << to_string(coords_list_[v]) << "\", " 
+           << "load = \""   << to_string(loads_list_[v])  << "\", "
+           << "bcs = \""    << to_string(bcs_list_[v])    << "\", "
+           // << "torque = \"" << torques_list[v] << "\"" 
+           << ']';
+    }
+    
+private:
+    const property_map_t<fixed_vector<2> >  coords_list_;
+    const property_map_t<fixed_vector<2> >   loads_list_;
+    const property_map_t<fixed_vector<3> >     bcs_list_;
+    const property_map_t<fixed_vector<1> > torques_list_;
+    
+};
+
+template <int N>
+std::string
+to_string(const fixed_vector<N>& v,
+          const std::string lx_delim,
+          const std::string rx_delim)
+{
+    std::ostringstream oss;
+    oss << lx_delim;
+    for(auto i = 0u; i < N-1; ++i) oss << v[i] << ", ";
+    oss << v[N-1];
+    oss << rx_delim;
+
+    return oss.str();
+}
 
 } //end namespace eva
 

@@ -13,59 +13,63 @@ namespace eva {
     
 //####################################### DECLARATIONS #############################################
 
-//--------------------------------------- Properties ---------------------------------------------//
+//----------------------------------------- Properties -------------------------------------------//
+/// Truss tag type
+template <int N> struct truss_kind;
+
 /// Truss joint (node) properties
 template <int N> struct truss_joint;
 
 /// Truss element (edge) properties
 template <int N> struct truss_element;
 
-/// Truss tag type
-template <int N> struct truss_type 
+
+//-------------------------------------- Truss tag types -----------------------------------------//
+/// 2-dimensional truss structure type
+using truss2d = generic_structure<truss_joint<2>, truss_element<2>, truss_kind<2>>;
+    
+/// 3-dimensional truss structure type
+using truss3d = generic_structure<truss_joint<3>, truss_element<3>, truss_kind<3>>;
+
+
+//-------------------------------------- Post-processing -----------------------------------------//
+template <int N> 
+struct internal_forces_getter<truss_kind<N>>;
+
+
+//------------------------------------- Problem Assembling ---------------------------------------//
+/// Specializes element_matrix_assembler functor for a 2D trusses
+template <>
+struct element_matrix_assembler<truss_kind<2>>;
+
+/// Specializes element_matrix_assembler functor for a 3D trusses
+template <>
+struct element_matrix_assembler<truss_kind<3>>; 
+
+/// Specializes known_terms_assembler functor for both 2D and 3D trusses
+template <int N>
+struct known_terms_assembler<truss_kind<N>>;
+
+
+//------------------------------------- Results Assembling ---------------------------------------//
+template <int N>
+struct result<truss_kind<N>>;
+
+
+//####################################### DEFINITIONS ##############################################
+  
+//----------------------------------------- Properties -------------------------------------------//
+template <int N> struct truss_kind 
 {     
     constexpr static int ndof = N; 
     constexpr static int sdim = N; 
 };
 
 
-//--------------------------------- 2/3-D Truss Typedefs -----------------------------------------//
-/// 2-dimensional truss structure type
-using truss2d = generic_structure<truss_joint<2>, truss_element<2>, truss_type<2>>;
-    
-/// 3-dimensional truss structure type
-using truss3d = generic_structure<truss_joint<3>, truss_element<3>, truss_type<3>>; 
-
-
-
-//----------------------------------- Functors and Functions -------------------------------------//
-
-// -- Post-processing --//
-template <int N> 
-struct internal_forces_getter<truss_type<N>>;
-
-// -- Problem Assembling -- //
-/// Specializes element_matrix_assembler functor for a 2D trusses
-template <>
-struct element_matrix_assembler<truss_type<2>>;
-
-/// Specializes element_matrix_assembler functor for a 3D trusses
-template <>
-struct element_matrix_assembler<truss_type<3>>; 
-
-/// Specializes known_terms_assembler functor for both 2D and 3D trusses
-template <int N>
-struct known_terms_assembler<truss_type<N>>;     
-
-
-//####################################### DEFINITIONS ##############################################
-  
-//--------------------------------------- Properties ---------------------------------------------//
 template <int N> struct truss_joint 
 {
     fixed_vector<N> coords; ///< Joint coordinates
-    
     fixed_vector<N> load;   ///< Applied load [N]
-    
     fixed_vector<N> bcs;    ///< Boundary conditions
     
     /// Default constructor. Initializes
@@ -87,11 +91,9 @@ template <int N> struct truss_element
 
 
 
-//----------------------------------- Functors and Functions -------------------------------------//
-
-// -- Post-processing --//
+//-------------------------------------- Post-processing -----------------------------------------//
 template <int N> 
-struct internal_forces_getter<truss_type<N>> 
+struct internal_forces_getter<truss_kind<N>> 
 {
     template <typename S>
     std::array<fixed_vector<S::graph_bundled::ndof>,2>
@@ -100,8 +102,7 @@ struct internal_forces_getter<truss_type<N>>
     {
         const static size_t ndof = S::graph_bundled::ndof; 
         
-        // Get local element matrix 
-        //~ std::cout <<  s[e].E * s[e].A << std::endl;
+        // Get local element matrix
         auto K_el = assemble_element_matrix(e, s);
         
         // Get bar endings idxs and applied loads
@@ -141,15 +142,15 @@ struct internal_forces_getter<truss_type<N>>
             res_a(i) = forces(i);
             res_b(i) = forces(i+ndof);
         }
-        
         return res;
     }
 };
 
 
-// -- Problem Assembling -- //
+
+//------------------------------------- Problem Assembling ---------------------------------------//
 template <>
-struct element_matrix_assembler<truss_type<2>> 
+struct element_matrix_assembler<truss_kind<2>> 
 {
     template <typename S>
     fixed_matrix<4,4>
@@ -187,7 +188,7 @@ struct element_matrix_assembler<truss_type<2>>
 };
 
 template <> 
-struct element_matrix_assembler<truss_type<3>> 
+struct element_matrix_assembler<truss_kind<3>> 
 {
     template <typename S>
     fixed_matrix<6,6>
@@ -226,7 +227,7 @@ struct element_matrix_assembler<truss_type<3>>
 
 
 template <int N>
-struct known_terms_assembler<truss_type<N>> 
+struct known_terms_assembler<truss_kind<N>> 
 {
     template <typename S>
     std::array<dense_vector, 2>
@@ -257,111 +258,33 @@ struct known_terms_assembler<truss_type<N>>
                     u_b(--pos_u) = bcs(i);
             }
         }
-        
         return ret;
     }
 };
 
-//######################################## Unused/old ##############################################
-//~ template <> fixed_array1d<4, index_t> 
-//~ build_local_to_global_dofmap<2>(index_t na, index_t nb, const std::vector<index_t>& dm) {
-    //~ 
-    //~ return  fixed_array1d<4, index_t> {dm[2*na], dm[2*na+1],
-                                       //~ dm[2*nb], dm[2*nb+1]};
-//~ }
-//~ 
-//~ template <> fixed_array1d<6, index_t> 
-//~ build_local_to_global_dofmap<3>(index_t na, index_t nb, const std::vector<index_t>& dm) {
-    //~ 
-    //~ return  fixed_array1d<6,index_t> {dm[3*na], dm[3*na+1], dm[3*na+2],
-                                      //~ dm[3*nb], dm[3*nb+1], dm[3*nb+2]};
-//~ }
-
-//~ template<> fixed_array2d<4,4>
-//~ truss_element_matrix<2>(const fixed_array1d<2>& a,
-                        //~ const fixed_array1d<2>& b,
-                        //~ real EA) {
-//~ 
-    //~ // Compute truss length, sine and cosine
-    //~ real L = sqrt((b[0]-a[0])*(b[0]-a[0]) + (b[1]-a[1])*(b[1]-a[1]));
-    //~ real c = (b[0]-a[0]) / L;
-    //~ real s = (b[1]-a[1]) / L;
-    //~ 
-    //~ // Cache needed values
-    //~ real cc = EA / L * c*c;
-    //~ real cs = EA / L * c*s;
-    //~ real ss = EA / L * s*s;
-        //~ 
-    //~ // Convenient alias
-    //~ typedef  fixed_array2d<4,4>::value_type arr1d;    
-    //~ 
-    //~ // Build element matrix in GLOBAL coordinates
-    //~ auto k = fixed_array2d<4,4> {arr1d{ cc, cs,-cc,-cs },
-                                 //~ arr1d{ cs, ss,-cs,-ss },
-                                 //~ arr1d{-cc,-cs, cc, cs },
-                                 //~ arr1d{-cs,-ss, cs, ss }};
-    //~ return k;
-//~ }
 
 
-//~ template<> fixed_array2d<6,6>
-//~ truss_element_matrix<3>(const fixed_array1d<3>& a,
-                        //~ const fixed_array1d<3>& b,
-                        //~ real EA) {
-     //~ 
-    //~ real L  = sqrt((b[0]-a[0])*(b[0]-a[0]) + (b[1]-a[1])*(b[1]-a[1]) + (b[2]-a[2])*(b[2]-a[2]));
-    //~ real cc = sqrt(EA)/L; 
-    //~ 
-    //~ // Compute EA / L * cosine(theta_x/y/z) 
-    //~ real cx = cc*(b[0]-a[0]);
-    //~ real cy = cc*(b[1]-a[1]);
-    //~ real cz = cc*(b[2]-a[2]);
-    //~ 
-    //~ // Convenient alias
-    //~ typedef  fixed_array2d<6,6>::value_type arr1d;
-    //~ 
-    //~ // Build matrix
-    //~ auto k = fixed_array2d<6,6> {arr1d{ cx*cx,  cx*cy,  cx*cz, -cx*cx, -cx*cy, -cx*cz },
-                                 //~ arr1d{ cx*cy,  cy*cy,  cy*cz, -cx*cy, -cy*cy, -cy*cz },
-                                 //~ arr1d{ cx*cz,  cy*cz,  cz*cz, -cx*cz, -cy*cz, -cz*cz },
-                                 //~ arr1d{-cx*cx, -cx*cy, -cx*cz,  cx*cx,  cx*cy,  cx*cz },
-                                 //~ arr1d{-cx*cy, -cy*cy, -cy*cz,  cx*cy,  cy*cy,  cy*cz },
-                                 //~ arr1d{-cx*cz, -cy*cz, -cz*cz,  cx*cz,  cy*cz,  cz*cz }};
-    //~ return k;                          
-//~ }
+//------------------------------------- Results Assembling ---------------------------------------//
+template <int N>
+struct result<truss_kind<N>>
+{
+    constexpr static int ndof = truss_kind<N>::ndof;
+    constexpr static int sdim = truss_kind<N>::sdim;
+    
+    fixed_vector<sdim> displacement;
+    fixed_vector<sdim> force;
 
-//~ template <size_t N>
-//~ std::ostream& operator<<(std::ostream& os, const eva::truss_type<N>& tt) {
-    //~ return os << "I'm a truss";
-//~ }
-//~ 
-//~ 
-//~ template <size_t N>
-//~ std::ostream& operator<<(std::ostream& os, const eva::truss_joint<N>& tj) {
-    //~ std::copy(begin(tj.coords), end(tj.coords), std::ostream_iterator<eva::real>(os, " "));
-    //~ return os;
-//~ }
-//~ 
-//~ template <size_t N>
-//~ std::ostream& operator<<(std::ostream& os, const eva::truss_element<N>& te) {
-    //~ return os << te.E;
-//~ }
-//~ 
-//~ 
-//~ template <size_t N>
-//~ std::istream& operator>>(std::istream& is, eva::truss_type<N>& tt) {
-    //~ return is;
-//~ }
-//~ 
-//~ template <size_t N>
-//~ std::istream& operator>>(std::istream& is, eva::truss_joint<N>& te) {
-    //~ return is;
-//~ }
-//~ 
-//~ template <size_t N>
-//~ std::istream& operator>>(std::istream& is, eva::truss_element<N>& tj) {
-    //~ return is;
-//~ }
+    result(const fixed_vector<ndof>& u, const fixed_vector<ndof>& f)
+        : displacement(u.head(sdim))
+        , force       (f.head(sdim))
+    {}
+    // result(fixed_vector<ndof>&& u, fixed_vector<ndof>&& f)
+    //     : displacement(std::move(u.segment<sdim>(0)))
+    //     , force       (std::move(f.segment<sdim>(0)))
+    // {}
+};
+
+
     
 } //end namespace eva
 

@@ -4,28 +4,6 @@
 # include "io.hpp"
 
 
-template <class PosMap>
-class vertex_writer {
-    
-public:
-    vertex_writer(const PosMap& positions) : positions_(positions) {}
-    template <class Vertex>
-    void operator()(std::ostream& out, const Vertex& v) const {
-        out << "[label=\"" << positions_[v].transpose() << "\"]";
-    }
-    
-private:
-    const PosMap& positions_;
-};
-
-template <typename PosMap>
-vertex_writer<PosMap>
-make_vertex_writer(const PosMap& p)
-{
-    return vertex_writer<PosMap>(p);
-}
-
-
 int main(int argc, char * argv [])
 {
     // Check for input file
@@ -36,52 +14,53 @@ int main(int argc, char * argv [])
 
     // Read structure from file
     auto filename  = std::string(argv[1]);
-    auto structure = eva::read_from_graphviz<eva::truss2d>(filename);
+    auto structure = eva::read_from_graphviz<eva::frame2d>(filename);
 
     // Solve structure
-    auto u = std::vector<eva::real> ();
-    auto f = std::vector<eva::real> ();
-    std::tie(u,f) = solve(structure, eva::dense_solver_params<>());
+    auto res = solve(structure, eva::sparse_solver_params<>());
+    // auto& u = std::get<0>(res);
+    // auto& f = std::get<1>(res);
 
-    // Printing displacements
+    // Print displacements
     std::cout << "-----------------------------------------------" 
               << std::endl << "Displacements:\n";
-    for (const auto& el : u) std::cout << el << std::endl;
-
-    // Printing reactions
+    for (const auto& r : res) std::cout << r.displacement.transpose() << std::endl;
+     // std::cout << u << std::endl;
+    
+    // Print reactions
     std::cout << "-----------------------------------------------" 
               << std::endl << "Reactions:\n";
-    for (const auto& el : f) std::cout << el << std::endl;
-
-    // Computing&printing compliance
-    std::cout << "-----------------------------------------------" 
-              << std::endl << "Compliance:\n";
-    auto compliance = 0.;
-    for(auto i = 0u; i < f.size(); ++i) compliance += u[i]*f[i];
-    std::cout << compliance << std::endl;
-
-    // Retrieve element member forces
-    auto element        = decltype(structure)::edge_descriptor(); 
-    auto element_exists = false;
-    std::tie(element, element_exists) = edge(1, 2, structure);
+    for (const auto& r : res) std::cout << r.force.transpose() << std::endl;
+    // std::cout << f << std::endl;
     
-    if (element_exists) {
-        auto f_element = get_internal_forces(element, structure, u, f);
-        std::cout << "NA ->  " << std::get<0>(f_element) << std::endl;
-        std::cout << "NB ->  " << std::get<1>(f_element) << std::endl;
-    }
-    else {
-        std::cout << "Warning: element " << element << " does not exist!\n";
-    }
+    // // Compute&print compliance
+    // std::cout << "-----------------------------------------------" 
+    //           << std::endl << "Compliance:\n";
+    // auto compliance = 0.;
+    // for(auto i = 0u; i < f.size(); ++i) compliance += u[i]*f[i];
+    // std::cout << compliance << std::endl;
+
+    // // Retrieve element member forces
+    // auto element        = decltype(structure)::edge_descriptor(); 
+    // auto element_exists = false;
+    // std::tie(element, element_exists) = edge(1, 2, structure);
+    
+    // if (element_exists) {
+    //     auto f_element = get_internal_forces(element, structure, u, f);
+    //     std::cout << "NA ->  " << std::get<0>(f_element) << std::endl;
+    //     std::cout << "NB ->  " << std::get<1>(f_element) << std::endl;
+    // }
+    // else {
+    //     std::cout << "Warning: element " << element << " does not exist!\n";
+    // }
     
     ///////////////////////////////////////////////////////////////
 
     // using v_prop = decltype(structure)::vertex_bundled;
     std::ofstream os;
-    os.open("output/truss2d.dot");
+    os.open("output/frame2d.dot");
     
-    write_graphviz(os, structure,
-                   make_joint_properties_writer(structure));
+    write_graphviz(os, structure, make_joint_properties_writer(structure));
     
     
     // Init properties to write

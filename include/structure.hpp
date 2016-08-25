@@ -55,22 +55,7 @@ template < typename NodeProps, typename EdgeProps, typename Kind >
 using generic_structure = boost::adjacency_list< boost::vecS, boost::vecS, boost::undirectedS,
                                                  NodeProps, EdgeProps, Kind, boost::vecS >;
 
-//----------------------------------- Functors and Functions -------------------------------------//
-
-// -- Post-processing --//
-// Get member internal forces
-template <typename Structure> 
-auto
-get_internal_forces(const typename Structure::edge_descriptor& e, const Structure& s, 
-                    const std::vector<real>& u, const std::vector<real>& f);
-
-/// Functor that computes member internal forces.
-/// Has to be specialized for every structure type.
-template <typename StructureType> 
-struct internal_forces_getter;
-
-
-// -- Problem Solving -- //
+//-------------------------------------- Problem Solving -----------------------------------------//
 /// Specifies the algebra (dense/sparse) and solver (see Eigen docs) types that have to be used
 template <typename Algebra, typename Solver>
 struct solver_params;
@@ -89,7 +74,6 @@ using dense_solver_params = solver_params<dense_algebra_t, S>;
 /// Specifies the algebra and solver types that the sparse solver has to use
 template <typename S = Eigen::ConjugateGradient<sparse_matrix> >
 using sparse_solver_params = solver_params<sparse_algebra_t, S>;
-// struct sparse_solver_params;
 
 /// Solves a given problem automatically deducing the structure type
 template <
@@ -99,12 +83,12 @@ template <
 auto
 solve(const Structure& s, Params p = Params());
 
-/// Generic solver functor: has to be specialized for every structure type
-template <typename StructureType, typename Params>
+/// Generic solver functor: has to be specialized for every kind of structure
+template <typename StructureKind, typename Params>
 struct solver;
 
 
-// -- Problem Assembling -- //
+//------------------------------------- Problem Assembling ---------------------------------------//
 /// Assembles the system stiffness matrix in global coordinates.
 template <typename A, typename S>
 auto
@@ -123,8 +107,8 @@ std::array<dense_vector, 2>
 assemble_known_terms(const S& s, const size_t n_f, const size_t n_b);
 
 /// Functor that assembles the element (local) stiffness matrix. 
-/// Has to be specialized for every structure type
-template <typename StructureType> 
+/// Has to be specialized for every kind of structure
+template <typename StructureKind> 
 struct element_matrix_assembler;
 
 /// Assembles the element (local) stiffness matrix
@@ -133,13 +117,12 @@ auto
 assemble_element_matrix(const typename Structure::edge_descriptor& e, const Structure& s);
 
 /// Functor that assembles the known terms vectors (source term and BCs related DOF).
-/// Has to be specialized for every structure type
-template <typename StructureType> 
+/// Has to be specialized for every kind of structure
+template <typename StructureKind> 
 struct known_terms_assembler;
 
 
-// -- DOF handling -- //
-
+//---------------------------------------- DOF handling ------------------------------------------//
 /// Builds a DOF map where the positions of DOF associated 
 /// to BCs are located at the end
 template <typename S>
@@ -159,43 +142,42 @@ count_nnz_entries(const S& s, const std::vector<index_t>& dofmap,
 
 /// Takes two vectors -one containing a quantity on free DOF, the other on BC DOF-
 /// and merge them together reordering DOF accordingly to the supplied DOF map
-std::vector<real> 
+dense_vector 
 merge_and_reorder(const dense_vector& v_f, const dense_vector& v_b, 
                   const std::vector<index_t>& dofmap);
-                  
-std::vector<real> 
-merge_and_reorder(const sparse_vector& v_f, const sparse_vector& v_b, 
-                  const std::vector<index_t>& dofmap);
 
 
-//######################################## Definitions #############################################
+//------------------------------------- Results Assembling ---------------------------------------//
+/// Represents the results of the solvin procedure applied to a
+/// certain structure. Has to be specialized for every kind of structure.
+template <typename StructureKind>
+struct result;
 
-//----------------------------------- Functors and Functions -------------------------------------//
-      
-// -- Post-processing --//
-template <typename StructureType> 
-struct internal_forces_getter 
-{
-    template <typename S>
-    void 
-    operator()(const typename S::edge_descriptor& e, const S& s,
-               const std::vector<real>& u, const std::vector<real>& f) 
-    { 
-        static_assert(!std::is_same<S,S>::value, 
-                      "Method not implemented");
-    }
-};
+/// Assembles the output of the solving procedure for a generic
+/// given structure.
+template <typename StructureKind>
+std::vector<result<StructureKind>>
+assemble_results(
+    const dense_vector& u,
+    const dense_vector& f,
+    const std::vector<index_t>& dofmap);
 
-template <typename S> 
+
+//-------------------------------------- Post-processing -----------------------------------------//
+// Get member internal forces
+template <typename Structure> 
 auto
-get_internal_forces(const typename S::edge_descriptor& e, const S& s, 
-                    const std::vector<real>& u, const std::vector<real>& f) 
-{
-    return internal_forces_getter<typename S::graph_bundled>()(e, s, u, f);
-}
+get_internal_forces(const typename Structure::edge_descriptor& e, const Structure& s, 
+                    const std::vector<real>& u, const std::vector<real>& f);
 
-      
-// -- Problem Solving -- //
+/// Functor that computes member internal forces.
+/// Has to be specialized for every structure type.
+template <typename StructureKind> 
+struct internal_forces_getter;
+
+
+//######################################## Definitions #############################################      
+//-------------------------------------- Problem Solving -----------------------------------------//
 template <typename Params, typename Kind, typename Structure>
 auto
 solve(const Structure& s, Params p) 
@@ -215,20 +197,9 @@ struct solver_params
     using algebra_t = A;
     using solver_t  = S;
 };
-// struct dense_solver_params 
-// {
-//     using algebra_t = dense_algebra_t;
-//     using  solver_t = Eigen::LDLT<dense_matrix>;
-// };
 
 
-// struct sparse_solver_params 
-// {
-//     using algebra_t = sparse_algebra_t;
-//     using  solver_t = Eigen::ConjugateGradient<sparse_matrix>;
-// };
-
-template <typename StructureType, typename Params>
+template <typename StructureKind, typename Params>
 struct solver 
 {    
     using algebra_t = typename Params::algebra_t;
@@ -251,7 +222,7 @@ struct solver
         // $_b := BC   DOF
         
         // Build (global) DOF map with BCs related nodes located to the back
-        auto   dofmap = std::vector<index_t>();
+        auto dofmap = std::vector<index_t>();
         size_t n_f, n_b;
         std::tie(dofmap, n_f, n_b) = build_global_dofmap(s);
         
@@ -301,13 +272,18 @@ struct solver
         // using the original DOF ordering
         auto uu = merge_and_reorder(u_f, u_b, dofmap);
         auto ff = merge_and_reorder(f_f, f_b, dofmap);
-        
-        return std::make_pair(std::move(uu), std::move(ff));
+
+        // auto uu = dense_vector(n_f + n_b);
+        // uu << std::move(u_f), std::move(u_b);
+        // reorder(uu, dofmap, n_f);
+
+        return assemble_results<StructureKind>(uu, ff, dofmap);
+        // return std::make_pair(std::move(uu), std::move(ff));
     }
 };
 
 
-// -- Problem Assembling -- //
+//------------------------------------- Problem Assembling ---------------------------------------//
 template <typename S> 
 auto
 assemble_element_matrix(const typename S::edge_descriptor& e, const S& s) 
@@ -315,7 +291,7 @@ assemble_element_matrix(const typename S::edge_descriptor& e, const S& s)
     return element_matrix_assembler<typename S::graph_bundled>()(e, s);
 }
 
-template <typename StructureType> 
+template <typename StructureKind> 
 struct element_matrix_assembler 
 {
     template <typename S>
@@ -334,7 +310,7 @@ assemble_known_terms(const S& s, const size_t n_f, const size_t n_b)
     return known_terms_assembler<typename S::graph_bundled>()(s, n_f, n_b);
 }
 
-template <typename StructureType>
+template <typename StructureKind>
 struct known_terms_assembler 
 {
     template <typename S>
@@ -355,7 +331,7 @@ assemble_stiffness_matrix(const S& s, const std::vector<index_t>& dofmap,
     return stiffness_matrix_assembler<A>()(s, dofmap, n_f, n_b);
 }
 
-template <typename AlgebraType>
+template <typename AlgebraKind>
 struct stiffness_matrix_assembler
 {
     template <typename S>
@@ -381,14 +357,9 @@ struct stiffness_matrix_assembler<dense_algebra_t>
         const static size_t dim = S::graph_bundled::ndof;
         
         // Init SYSTEM SUB-matrices
-        auto matrices = std::array<dense_matrix, 3> {
-            dense_matrix::Zero(n_f, n_f),
-            dense_matrix::Zero(n_f, n_b),
-            dense_matrix::Zero(n_b, n_b)};
-        
-        auto& K_ff = std::get<0>(matrices);
-        auto& K_fb = std::get<1>(matrices);
-        auto& K_bb = std::get<2>(matrices);
+        dense_matrix K_ff = dense_matrix::Zero(n_f, n_f);
+        dense_matrix K_fb = dense_matrix::Zero(n_f, n_b);
+        dense_matrix K_bb = dense_matrix::Zero(n_b, n_b);
         
         // Loop over all edges
         for (auto&& e : make_iterator_range(edges(s))) {
@@ -422,8 +393,7 @@ struct stiffness_matrix_assembler<dense_algebra_t>
                     }
                 }
         }
-        // FIXME: Check for NRVO! (should work)
-        return matrices;
+        return {std::move(K_ff), std::move(K_fb), std::move(K_bb)};
     }
 };
 
@@ -448,21 +418,20 @@ struct stiffness_matrix_assembler<sparse_algebra_t>
         
         // Compute number of non-zero entries for each matrix
         auto nnzs = count_nnz_entries(s, dofmap, n_f, n_b);
-        
-        std::array<size_t, 3> nnz_tot {
-            std::accumulate(begin(nnzs[0]), end(nnzs[0]), 0u),
-            std::accumulate(begin(nnzs[1]), end(nnzs[1]), 0u),
-            std::accumulate(begin(nnzs[2]), end(nnzs[2]), 0u)};
-        
+
+        auto nnz_tot = std::array<size_t, 3> ();
+        for (size_t i = 0u; i < 3u; ++i)
+            std::accumulate(begin(nnzs[i]), end(nnzs[i]), 0u);
+
         // Allocate Triplet lists reserving the required space
-        auto triplet_lists = std::array<std::vector<Eigen::Triplet<real>>, 3> ();
+        using triplet_list_t = std::vector<Eigen::Triplet<real>>;
+        auto triplet_lists = std::array<triplet_list_t, 3> ();
         for (size_t idx = 0u; idx < 3u; ++idx) 
             triplet_lists[idx].reserve(nnz_tot[idx]);
-            
+
         auto& K_ff_list = std::get<0>(triplet_lists); 
         auto& K_fb_list = std::get<1>(triplet_lists);
         auto& K_bb_list = std::get<2>(triplet_lists);
-        
         
         // Loop over all edges
         for (auto&& e : make_iterator_range(edges(s))) {
@@ -501,8 +470,7 @@ struct stiffness_matrix_assembler<sparse_algebra_t>
         auto matrices = std::array<sparse_matrix, 3> {
             sparse_matrix(n_f, n_f),
             sparse_matrix(n_f, n_b),
-            sparse_matrix(n_b, n_b)}; 
-
+            sparse_matrix(n_b, n_b)};
         
         for (size_t idx = 0u; idx < dim; ++idx)
             matrices[idx].setFromTriplets(triplet_lists[idx].begin(), triplet_lists[idx].end());
@@ -696,60 +664,99 @@ build_local_to_global_dofmap(index_t na, index_t nb, const std::vector<index_t>&
 }
 
 
-std::vector<real> 
+
+dense_vector
 merge_and_reorder(const dense_vector& v_f, 
                   const dense_vector& v_b, 
                   const std::vector<index_t>& dofmap) 
-{    
+{
     // DOF sizes
     size_t n_f = v_f.size();  // Free DOF
     size_t n_b = v_b.size();  // BC DOF
-    size_t n_t = n_f  + n_b;  // Tot nr of DOF
-    
-    assert(dofmap.size() == n_t);
-    
-    auto rv = std::vector<real>(); rv.reserve(n_t);
-    
+    size_t n_t = n_f + n_b;  // Tot nr of DOF
+
+    // Pre-allocate return variable
+    auto rv = dense_vector(n_t);
+
+    // For each DOF
     for (size_t i = 0u; i < n_t; ++i) {
-        // Pick element to add from v_f if ii < n_f and from v_b otherwise
-        auto ii = dofmap[i]; 
-        rv.emplace_back( (ii < n_f) ? v_f(ii) : v_b(ii-n_f) );
+        // Retrieve mapped position
+        auto ii = dofmap[i];
+        // Fill position by picking the value from the proper vector
+         rv[i] = (ii < n_f) ? v_f(ii) : v_b(ii-n_f);
     }
     return rv;
 }
 
 
-std::vector<real> 
-merge_and_reorder(const sparse_vector& v_f, 
-                  const sparse_vector& v_b, 
-                  const std::vector<index_t>& dofmap) 
-{    
-    // DOF sizes
-    size_t n_f = v_f.size();  // Free DOF
-    size_t n_b = v_b.size();  // BC DOF
-    size_t n_t = n_f  + n_b;  // Tot nr of DOF
+dense_vector
+reorder(const dense_vector& v, const std::vector<index_t>& dofmap)
+{
+    // Pre-allocate results
+    auto n_t = v.size();
+    auto rv  = dense_vector(n_t);
     
-    assert(dofmap.size() == n_t);
-    
-    // Auxiliary vector that just concatenates v_f and v_b
-    auto auxv = std::vector<real>(n_t);
-    //~ auto auxv = dense_vector(n_t);
-    //~ auxv << v_f, v_b;
-    // Fill auxiliary vector with free DOF values
-    for (auto it = Eigen::SparseVector<double>::InnerIterator(v_f); it; ++it)
-        auxv[it.index()] = it.value();
-    
-    // Fill auxiliary vector with BC DOF values
-    for (auto it = Eigen::SparseVector<double>::InnerIterator(v_b); it; ++it)
-        auxv[it.index() + n_f] = it.value();
-    
-    // Build return vector by reordering back DOF
-    auto rv = std::vector<real>(); rv.reserve(n_t);
-    for (size_t i = 0u; i < n_t; ++i) 
-        rv.emplace_back(auxv[dofmap[i]]);
+    // Reorder
+    for (size_t i = 0u; i < n_t; ++i)
+        rv[i] = v[dofmap[i]];
     
     return rv;
 }
+
+
+
+//------------------------------------- Results Assembling ---------------------------------------//
+template <typename StructureKind>
+std::vector<result<StructureKind>>
+assemble_results(
+    const dense_vector& u,
+    const dense_vector& f,
+    const std::vector<index_t>& dofmap)
+{
+    // Aux vars
+    constexpr static int n_loc_dof = StructureKind::ndof;
+    auto n_nodes = dofmap.size() / n_loc_dof;
+    
+    // Pre-allocate results
+    typedef result<StructureKind> result_t;
+    auto results = std::vector<result_t> ();
+    results.reserve(n_nodes);
+
+    // For each joint/node
+    for(size_t node_it = 0u; node_it < n_nodes*n_loc_dof; node_it += n_loc_dof) {
+        // Assemble the corresponding results
+        results.emplace_back(result_t(u.segment<n_loc_dof>(node_it),
+                                      f.segment<n_loc_dof>(node_it)));
+    }
+    
+    return results;
+}
+
+
+
+//-------------------------------------- Post-processing -----------------------------------------//
+template <typename StructureKind> 
+struct internal_forces_getter 
+{
+    template <typename S>
+    void 
+    operator()(const typename S::edge_descriptor& e, const S& s,
+               const std::vector<real>& u, const std::vector<real>& f) 
+    { 
+        static_assert(!std::is_same<S,S>::value, 
+                      "Method not implemented");
+    }
+};
+
+template <typename S> 
+auto
+get_internal_forces(const typename S::edge_descriptor& e, const S& s, 
+                    const std::vector<real>& u, const std::vector<real>& f) 
+{
+    return internal_forces_getter<typename S::graph_bundled>()(e, s, u, f);
+}
+
+
 
 } // end namespace eva
 

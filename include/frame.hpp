@@ -12,64 +12,73 @@ namespace eva {
     
 //####################################### DECLARATIONS #############################################
 
-//--------------------------------------- Properties ---------------------------------------------//
+//----------------------------------------- Properties -------------------------------------------//
+/// Frame tag type
+template <int N> struct frame_kind;
+
 /// Frame joint (node) properties
 template <int N> struct frame_joint;
 
 /// Frame element (edge) properties
 template <int N> struct frame_element;
 
-/// Frame tag type
-template <int N> struct frame_type 
-{         
-    constexpr static int ndof = 3*(N-1); 
-    constexpr static int sdim = N; 
-};
 
-//--------------------------------- 2/3-D truss typedefs -----------------------------------------//
-/// 2-dimensional frame structure type
-using frame2d = generic_structure<frame_joint<2>, frame_element<2>, frame_type<2>>;
+//-------------------------------------- Frame tag types -----------------------------------------//
+/// 2-dimensional frame structure tag type
+using frame2d = generic_structure<frame_joint<2>, frame_element<2>, frame_kind<2>>;
 
-/// 3-dimensional frame structure type
-using frame3d = generic_structure<frame_joint<3>, frame_element<3>, frame_type<3>>;
+/// 3-dimensional frame structure tag type
+using frame3d = generic_structure<frame_joint<3>, frame_element<3>, frame_kind<3>>;
 
-//----------------------------------- Functors and Functions -------------------------------------//
-// -- Problem Assembling -- //
 
+//------------------------------------- Problem Assembling ---------------------------------------//
 /// Specializes element_matrix_assembler functor for a 2D frame
 template <> 
-struct element_matrix_assembler<frame_type<2>>;
+struct element_matrix_assembler<frame_kind<2>>;
 
 /// Specializes element_matrix_assembler functor for a 3D frame
 template <> 
-struct element_matrix_assembler<frame_type<3>>;
+struct element_matrix_assembler<frame_kind<3>>;
 
 /// Specializes known_terms_assembler functor for both 2D and 3D frames
 template <int N>
-struct known_terms_assembler<frame_type<N>>;
+struct known_terms_assembler<frame_kind<N>>;
 
+
+//------------------------------------- Results Assembling ---------------------------------------//
+template <int N>
+struct result<frame_kind<N>>;
 
 
 //####################################### DEFINITIONS ##############################################
 
 //--------------------------------------- Properties ---------------------------------------------//
+template <int N> struct frame_kind
+{         
+    constexpr static int ndof = 3*(N-1); // #(tot DOF)
+    constexpr static int sdim = N;       // #(spatial coordinates)
+    constexpr static int rdim = 2*N-3;   // #(rotations/torque dimensions)
+};
+
+
 template <int N> struct frame_joint 
-{    
-    fixed_vector<N> coords;     ///< Joint coordinates
+{
+    constexpr static int ndof = frame_kind<N>::ndof;
+    constexpr static int sdim = frame_kind<N>::sdim;
+    constexpr static int rdim = frame_kind<N>::rdim;
     
-    fixed_vector<N> load;       ///< Nodal load [N]
-    
-    fixed_vector<2*N-3> torque; ///< Nodal torque [Nm]
-    
-    fixed_vector<3*(N-1)> bcs;  ///< Boundary conditions [[displ.s], [rot.s]]
+    fixed_vector<sdim> coords; ///< Joint coordinates
+    fixed_vector<sdim> load;   ///< Nodal load [N]
+    fixed_vector<rdim> torque; ///< Nodal torque [Nm]
+    fixed_vector<ndof> bcs;    ///< Boundary conditions [[displ.s], [rot.s]]
     
     /// Default constructor. Initializes coords to zero,
     /// load to zero, torque to zero and bcs to nan
     frame_joint()
-        : coords(fixed_vector<N>::Zero()) 
-        , load  (fixed_vector<N>::Zero())
-        , torque(fixed_vector<2*N-3>::Zero())
-        , bcs   (fixed_vector<3*(N-1)>::Constant(std::numeric_limits<real>::quiet_NaN()))
+        : coords(fixed_vector<sdim>::Zero()) 
+        , load  (fixed_vector<sdim>::Zero())
+        , torque(fixed_vector<rdim>::Zero())
+        , bcs   (fixed_vector<ndof>::Constant(std::numeric_limits<real>::quiet_NaN()))
         {}
 };
 
@@ -77,33 +86,27 @@ template <int N> struct frame_joint
 template <> struct frame_element<2> 
 {    
     real E; ///< Young's modulus       [Pa]
-    
     real A; ///< Cross sectional area  [m^2]
-    
     real I; ///< Second moment of area [m^4]
 };
 
 
 template <> struct frame_element<3> 
 {    
-    real E;  ///< Young's modulus       [GPa]
-    
-    real A;  ///< Cross sectional area  [m^2]
-    
-    real G;  ///< Shear modulus [GPa]
+    real E; ///< Young's modulus       [GPa]    
+    real A; ///< Cross sectional area  [m^2]
+    real G; ///< Shear modulus         [GPa]
     
     real Ix; ///< Second moment of area wrt (local) x-axis [m^4]
-    
     real Iy; ///< Second moment of area wrt (local) y-axis [m^4]
-    
     real Iz; ///< Second moment of area wrt (local) z-axis [m^4]
 };
 
 
-//---------------------------------------- Functions ---------------------------------------------//
-    
+
+//------------------------------------- Problem Assembling ---------------------------------------//
 template <> 
-struct element_matrix_assembler<frame_type<2>> 
+struct element_matrix_assembler<frame_kind<2>> 
 {
     template <typename S>
     fixed_matrix<6,6>
@@ -161,7 +164,7 @@ struct element_matrix_assembler<frame_type<2>>
 
 
 template <> 
-struct element_matrix_assembler<frame_type<3>> 
+struct element_matrix_assembler<frame_kind<3>> 
 {
     template <typename S>
     fixed_matrix<6,6>
@@ -191,7 +194,8 @@ struct element_matrix_assembler<frame_type<3>>
         real L3 = L2*L;   
         
         // Build element matrix in GLOBAL coordinates
-        // DOF: [ [F_x, F_y, M]_{node A}, [F_x, F_y, M]_{node B} ] 
+        // DOF: [ [F_x, F_y, F_z, M_x, M_y, M_z]_{node A},
+        //        [F_x, F_y, F_z, M_x, M_y, M_z]_{node B} ] 
         auto k = fixed_matrix<6,6> ();
         
         k << EA/L*cc + 12.*EI/L3*ss,  EA/L*cs - 12.*EI/L3*cs, -6.*EI/L2*s,
@@ -218,7 +222,7 @@ struct element_matrix_assembler<frame_type<3>>
 
 
 template <int N>
-struct known_terms_assembler<frame_type<N>> 
+struct known_terms_assembler<frame_kind<N>> 
 {
     template <typename S>
     std::array<dense_vector, 2>
@@ -226,8 +230,7 @@ struct known_terms_assembler<frame_type<N>>
     {
         
         // Aux vars
-        //~ const static size_t sdim = S::graph_bundled::sdim;  // Spatial dim
-        const static size_t ndof = S::graph_bundled::ndof;  // #DOF per node (2D => 3, 3D => 6) 
+        const static size_t ndof = S::graph_bundled::ndof;
         
         // Init ret var
         auto ret = std::array<dense_vector, 2> {dense_vector(n_f),
@@ -269,7 +272,31 @@ struct known_terms_assembler<frame_type<N>>
         return ret;
     }
 };
+
+
+
+//------------------------------------- Results Assembling ---------------------------------------//
+template <int N>
+struct result<frame_kind<N>>
+{
+    constexpr static int ndof = frame_kind<N>::ndof;
+    constexpr static int sdim = frame_kind<N>::sdim;
+    constexpr static int rdim = frame_kind<N>::rdim;
     
+    fixed_vector<sdim> displacement;
+    fixed_vector<rdim> rotation;
+    fixed_vector<sdim> force;
+    fixed_vector<rdim> torque;
+    
+    // Initialize members
+    result(const fixed_vector<ndof>& u, const fixed_vector<ndof>& f)
+        : displacement(u.head(sdim))
+        , rotation    (u.tail(rdim))
+        , force       (f.head(sdim))
+        , torque      (f.tail(rdim))
+    {}
+};
+
 } //end namespace eva
 
 # endif //__EVA_FRAME__
