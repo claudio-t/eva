@@ -14,7 +14,7 @@ int main(int argc, char * argv [])
 
     // Read structure from file
     auto filename  = std::string(argv[1]);
-    auto structure = eva::read_from_graphviz<eva::frame2d>(filename);
+    auto structure = eva::read_from_graphviz<eva::truss3d>(filename);
 
     // Solve structure
     auto res = solve(structure, eva::sparse_solver_params<>());
@@ -32,6 +32,9 @@ int main(int argc, char * argv [])
               << std::endl << "Reactions:\n";
     for (const auto& r : res) std::cout << r.force.transpose() << std::endl;
     // std::cout << f << std::endl;
+
+    // Display undeformed structure
+    display(structure);
     
     // // Compute&print compliance
     // std::cout << "-----------------------------------------------" 
@@ -57,10 +60,9 @@ int main(int argc, char * argv [])
     ///////////////////////////////////////////////////////////////
 
     // using v_prop = decltype(structure)::vertex_bundled;
-    std::ofstream os;
-    os.open("output/frame2d.dot");
-    
-    write_graphviz(os, structure, make_joint_properties_writer(structure));
+    // std::ofstream os;
+    // os.open("output/frame2d.dot");    
+    // write_graphviz(os, structure, make_joint_properties_writer(structure));
     
     
     // Init properties to write

@@ -7,6 +7,7 @@
  */
 
 # include "graphviz.hpp"
+# include "vtk.hpp"
 
 
 # endif //__EVA_IO__
