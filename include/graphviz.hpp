@@ -23,59 +23,67 @@ namespace eva {
 
 //------------------------------------------- Read -----------------------------------------------//
 /// Reads and builds a structure from a proper input file
-template <typename Structure>
-Structure
-read_from_graphviz(const std::string& filename);
+template <typename S>
+S read_from_graphviz(const std::string& filename);
 
 /// Adds to the dynamic property map the properties required for
 /// reading a given structure
-template <typename Structure> 
+template <typename S> 
 void 
-setup_joint_properties(Structure& structure, boost::dynamic_properties& dyna_props);
+setup_joint_properties(S& structure, boost::dynamic_properties& dyna_props);
 
 /// Functor that selects the joint properties that have to be red
 /// from the input file. Has to be specialized for each joint type
-template <typename JointProps> struct joint_properties_selector;
+template <typename JointProps>
+struct joint_properties_selector;
 
 /// Specialization for reading a truss joint 
-template <int N> struct joint_properties_selector<truss_joint<N>>;
+template <int N>
+struct joint_properties_selector<truss_joint<N>>;
 
 /// Specialization for reading a 2D frame joint 
-template <> struct joint_properties_selector<frame_joint<2>>;
+template <>
+struct joint_properties_selector<frame_joint<2>>;
 
 /// Adds to the dynamic property map the properties required for
 /// reading a given structure
-template <typename Structure> 
+template <typename S> 
 void 
-setup_element_properties(Structure& structure, boost::dynamic_properties& dyna_props);
+setup_element_properties(S& structure, boost::dynamic_properties& dyna_props);
 
 /// Functor that selects the element properties that have to be red
 /// from the input file. Has to be specialized for each element type
-template <typename ElementProps> struct element_properties_selector;
+template <typename ElementProps>
+struct element_properties_selector;
 
 /// Specialization for reading a truss_element
-template <int N> struct element_properties_selector<truss_element<N>>;
+template <int N>
+struct element_properties_selector< truss_element<N> >;
 
 /// Specialization for reading a 2D frame element
-template <> struct element_properties_selector<frame_element<2>>;
+template <>
+struct element_properties_selector< frame_element<2> >;
 
 
 //------------------------------------------ Write -----------------------------------------------//
-template <typename Structure>
-auto make_joint_properties_writer(const Structure& s);
+template <typename S>
+auto make_joint_properties_writer(const S& structure);
 
 /// Functor that selects the joint properties that have to be written
 /// to the output file. Has to be specialized for each joint type
-template <typename Structure, typename JointProperties>
+template <typename S, typename JointProperties>
 class joint_properties_writer;
 
 /// Specialization for writing a truss joint
-template <typename Structure, int N>
-class joint_properties_writer<Structure, truss_joint<N>>;
+template <typename S, int N>
+class joint_properties_writer< S, truss_joint<N> >;
 
 /// Specialization for writing a 2D frame joint
-template <typename Structure>
-class joint_properties_writer<Structure, frame_joint<2>>;
+template <typename S>
+class joint_properties_writer< S, frame_joint<2> >;
+
+template <typename S>
+auto make_element_properties_writer(const S& structure);
 
 /// Utility function for pretty printing a fixed vector
 template <int N> std::string
@@ -89,12 +97,11 @@ to_string(
 //####################################### DEFINITIONS ##############################################
 
 //------------------------------------------- Read -----------------------------------------------//
-template <typename Structure>
-Structure
-read_from_graphviz(const std::string& filename) 
+template <typename S>
+S read_from_graphviz(const std::string& filename) 
 {    
     // Build empty structure //
-    auto structure = Structure();
+    auto structure = S();
     
     // Setup properties to be read
     auto dyna_props = boost::dynamic_properties(boost::ignore_other_properties);
@@ -111,99 +118,86 @@ read_from_graphviz(const std::string& filename)
 
 
 template <int N>
-struct joint_properties_selector<truss_joint<N>> 
+struct joint_properties_selector< truss_joint<N> > 
 {    
-    template <typename Structure> 
+    template <typename S> 
     void 
-    operator()(Structure& s, boost::dynamic_properties& dps) 
+    operator()(S& structure, boost::dynamic_properties& dps) 
     {
-        // Type checking
-        using vert_prop_type = typename Structure::vertex_bundled;
-        static_assert(std::is_base_of<truss_joint<N>, vert_prop_type>::value, 
-                      "Unfeasible structure type");
+        using vert_prop_type = typename joint_of<S>::type;
         
         // Read coordinates, loads and boundary conditions
-        dps.property("coords", get(&vert_prop_type::coords, s));
-        dps.property(  "load", get(&vert_prop_type::load,   s));
-        dps.property(   "bcs", get(&vert_prop_type::bcs,    s));
+        dps.property("coords", get(&vert_prop_type::coords, structure));
+        dps.property(  "load", get(&vert_prop_type::load,   structure));
+        dps.property(   "bcs", get(&vert_prop_type::bcs,    structure));
     }
 };
 
 
 template <int N>
-struct element_properties_selector<truss_element<N>> 
+struct element_properties_selector< truss_element<N> > 
 {    
-    template <typename Structure> 
+    template <typename S> 
     void 
-    operator()(Structure& s, boost::dynamic_properties& dps)
+    operator()(S& structure, boost::dynamic_properties& dps)
     {
-        // Type checking
-        using edge_prop_type = typename Structure::edge_bundled;
-        static_assert(std::is_base_of<truss_element<N>, edge_prop_type>::value, 
-                      "Unfeasible structure type");
+        using edge_prop_type = typename element_of<S>::type;
         
         // Read Young's modulus and cross sectional area
-        dps.property("E", get(&edge_prop_type::E, s));
-        dps.property("A", get(&edge_prop_type::A, s));
+        dps.property("E", get(&edge_prop_type::E, structure));
+        dps.property("A", get(&edge_prop_type::A, structure));
     }
 };
 
 
 template <>
-struct joint_properties_selector<frame_joint<2>> 
+struct joint_properties_selector< frame_joint<2> > 
 {    
-    template <typename Structure> 
+    template <typename S> 
     void 
-    operator()(Structure& s, boost::dynamic_properties& dps) 
+    operator()(S& structure, boost::dynamic_properties& dps) 
     {
-        // Type checking
-        using vert_prop_type = typename Structure::vertex_bundled;
-        
-        static_assert(std::is_base_of<frame_joint<2>, vert_prop_type>::value, 
-                      "Unfeasible structure type");
+        using vert_prop_type = typename joint_of<S>::type;
         
         // Read coordinates, torques, loads and boundary conditions
-        dps.property("coords", get(&vert_prop_type::coords, s));
-        dps.property("torque", get(&vert_prop_type::torque, s));
-        dps.property(  "load", get(&vert_prop_type::load,   s));
-        dps.property(   "bcs", get(&vert_prop_type::bcs,    s));
+        dps.property("coords", get(&vert_prop_type::coords, structure));
+        dps.property("torque", get(&vert_prop_type::torque, structure));
+        dps.property(  "load", get(&vert_prop_type::load,   structure));
+        dps.property(   "bcs", get(&vert_prop_type::bcs,    structure));
 
     }
 };
 
 template <>
-struct element_properties_selector<frame_element<2>> 
+struct element_properties_selector< frame_element<2> > 
 {    
-    template <typename Structure> 
+    template <typename S> 
     void 
-    operator()(Structure& s, boost::dynamic_properties& dps)
+    operator()(S& structure, boost::dynamic_properties& dps)
     {
-        // Type checking
-        using edge_prop_type = typename Structure::edge_bundled;
-        static_assert(std::is_base_of<frame_element<2>, edge_prop_type>::value, 
-                      "Unfeasible structure type");
+        using edge_prop_type = typename element_of<S>::type;
         
         // Read Young's modulus and cross sectional area
-        dps.property("E", get(&edge_prop_type::E, s));
-        dps.property("A", get(&edge_prop_type::A, s));
-        dps.property("I", get(&edge_prop_type::I, s));
+        dps.property("E", get(&edge_prop_type::E, structure));
+        dps.property("A", get(&edge_prop_type::A, structure));
+        dps.property("I", get(&edge_prop_type::I, structure));
     }
 };
 
 
-template <typename Structure> 
+template <typename S> 
 void
-setup_joint_properties(Structure& s, boost::dynamic_properties& dps) 
+setup_joint_properties(S& s, boost::dynamic_properties& dps) 
 {
-    joint_properties_selector<typename Structure::vertex_bundled>()(s, dps);
+    joint_properties_selector<typename joint_of<S>::type>()(s, dps);
 }
 
 
-template <typename Structure> 
+template <typename S> 
 void
-setup_element_properties(Structure& s, boost::dynamic_properties& dps) 
+setup_element_properties(S& s, boost::dynamic_properties& dps) 
 {
-    element_properties_selector<typename Structure::edge_bundled>()(s, dps);
+    element_properties_selector<typename element_of<S>::type>()(s, dps);
 }
 
 
@@ -212,27 +206,27 @@ template <typename S>
 auto
 make_joint_properties_writer(const S& s)
 {
-    return joint_properties_writer<S, typename S::vertex_bundled>(s);
+    return joint_properties_writer<S, typename joint_of<S>::type>(s);
 }
 
-template <typename Structure, int N>
-class joint_properties_writer<Structure, truss_joint<N> >
+template <typename S, int N>
+class joint_properties_writer< S, truss_joint<N> >
 {
 public:
-    using props = typename Structure::vertex_bundled;
+    using props = typename joint_of<S>::type;
 
     template <typename P>
     using property_map_t = boost::vec_adj_list_vertex_property_map<
-        Structure, const Structure *,
+        S, const S *,
         P, const P&,
         P eva::truss_joint<N>::*
         >;
 
     /// Constructor that initializes member data
-    joint_properties_writer(const Structure& s)
-        : coords_list_(get(&props::coords, s)),
-          loads_list_ (get(&props::load,   s)),
-          bcs_list_   (get(&props::bcs,    s))
+    joint_properties_writer(const S& structure)
+        : coords_list_(get(&props::coords, structure))
+        , loads_list_ (get(&props::load,   structure))
+        , bcs_list_   (get(&props::bcs,    structure))
         {}
     
     template <class Vertex>
@@ -242,35 +236,34 @@ public:
            << "coords = \"" << to_string(coords_list_[v]) << "\", " 
            << "load = \""   << to_string(loads_list_[v])  << "\", "
            << "bcs = \""    << to_string(bcs_list_[v])    << "\", "
-           // << "pos = \""    << to_string(coords_list_[v], "", "") << "!\"" 
            << ']';
     }
     
 private:
-    const property_map_t<fixed_vector<N> > coords_list_;
-    const property_map_t<fixed_vector<N> >  loads_list_;
-    const property_map_t<fixed_vector<N> >    bcs_list_;
+    const property_map_t< fixed_vector<N> > coords_list_;
+    const property_map_t< fixed_vector<N> >  loads_list_;
+    const property_map_t< fixed_vector<N> >    bcs_list_;
 };
 
-template <typename Structure>
-class joint_properties_writer<Structure, frame_joint<2> >
+template <typename S>
+class joint_properties_writer< S, frame_joint<2> >
 {
 public:
-    using props = typename Structure::vertex_bundled;
+    using props = typename joint_of<S>::type;
 
     template <typename P>
     using property_map_t = boost::vec_adj_list_vertex_property_map<
-        Structure, const Structure *,
+        S, const S *,
         P, const P&,
         P eva::frame_joint<2>::*
         >;
 
     /// Constructor that initializes member data
-    joint_properties_writer(const Structure& s)
-        : coords_list_ (get(&props::coords, s)),
-          loads_list_  (get(&props::load,   s)),
-          bcs_list_    (get(&props::bcs,    s)),
-          torques_list_(get(&props::torque, s))
+    joint_properties_writer(const S& structure)
+        : coords_list_ (get(&props::coords, structure)),
+          loads_list_  (get(&props::load,   structure)),
+          bcs_list_    (get(&props::bcs,    structure)),
+          torques_list_(get(&props::torque, structure))
         {}
 
     /// Actual functor implementation
@@ -286,10 +279,10 @@ public:
     }
     
 private:
-    const property_map_t<fixed_vector<2> >  coords_list_;
-    const property_map_t<fixed_vector<2> >   loads_list_;
-    const property_map_t<fixed_vector<3> >     bcs_list_;
-    const property_map_t<fixed_vector<1> > torques_list_;
+    const property_map_t< fixed_vector<2> >  coords_list_;
+    const property_map_t< fixed_vector<2> >   loads_list_;
+    const property_map_t< fixed_vector<3> >     bcs_list_;
+    const property_map_t< fixed_vector<1> > torques_list_;
     
 };
 
@@ -313,7 +306,7 @@ to_string(const fixed_vector<N>& v,
 namespace boost { namespace detail {
 
 template<int N, typename T>
-struct lexical_cast_do_cast<eva::fixed_vector<N,T>, std::string>
+struct lexical_cast_do_cast< eva::fixed_vector<N,T>, std::string >
 {     
     static void  
     do_assign(const double value, eva::fixed_vector<N,T>& vec, const size_t idx) 
@@ -336,7 +329,8 @@ struct lexical_cast_do_cast<eva::fixed_vector<N,T>, std::string>
         auto t_ = qi::real_parser<T>();
         static_assert(std::is_floating_point<T>::value, 
                        "Integral types are not supported yet.");
-        
+
+        // The actual parser
         qi::rule<iterator_type, eva::fixed_vector<N,T>(),
                  qi::locals<size_t>, qi::blank_type> rule = 
             qi::eps [ qi::_a = 0 ]
@@ -392,7 +386,7 @@ struct lexical_cast_do_cast<eva::fixed_vector<N,T>, std::string>
 
 
 template<>
-struct lexical_cast_do_cast<eva::fixed_vector<1, double>, std::string>
+struct lexical_cast_do_cast< eva::fixed_vector<1, double>, std::string >
 { 
     static inline
     eva::fixed_vector<1, double>
@@ -404,7 +398,7 @@ struct lexical_cast_do_cast<eva::fixed_vector<1, double>, std::string>
     }
 };
 template<>
-struct lexical_cast_do_cast<eva::fixed_vector<1, float>, std::string>
+struct lexical_cast_do_cast< eva::fixed_vector<1, float>, std::string >
 { 
     static inline
     eva::fixed_vector<1, float>
@@ -416,7 +410,7 @@ struct lexical_cast_do_cast<eva::fixed_vector<1, float>, std::string>
     }
 };
 template<>
-struct lexical_cast_do_cast<eva::fixed_vector<1, int>, std::string>
+struct lexical_cast_do_cast< eva::fixed_vector<1, int>, std::string >
 { 
     static inline
     eva::fixed_vector<1, int>

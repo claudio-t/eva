@@ -2,7 +2,8 @@
 # include "truss.hpp"
 # include "frame.hpp"
 # include "io.hpp"
-
+# include "graphviz.hpp"
+# include "utils.hpp"
 
 int main(int argc, char * argv [])
 {
@@ -17,31 +18,58 @@ int main(int argc, char * argv [])
     auto structure = eva::read_from_graphviz<eva::truss3d>(filename);
 
     // Solve structure
-    auto res = solve(structure, eva::sparse_solver_params<>());
-    // auto& u = std::get<0>(res);
-    // auto& f = std::get<1>(res);
+    auto results = solve(structure, eva::sparse_solver_params<>());
 
     // Print displacements
     std::cout << "-----------------------------------------------" 
               << std::endl << "Displacements:\n";
-    for (const auto& r : res) std::cout << r.displacement.transpose() << std::endl;
-     // std::cout << u << std::endl;
+    for (const auto& r : results) std::cout << r.displacement.transpose() << std::endl;
     
     // Print reactions
     std::cout << "-----------------------------------------------" 
               << std::endl << "Reactions:\n";
-    for (const auto& r : res) std::cout << r.force.transpose() << std::endl;
-    // std::cout << f << std::endl;
-
-    // Display undeformed structure
-    display(structure);
+    for (const auto& r : results) std::cout << r.reaction.transpose() << std::endl;
     
     // // Compute&print compliance
     // std::cout << "-----------------------------------------------" 
     //           << std::endl << "Compliance:\n";
     // auto compliance = 0.;
-    // for(auto i = 0u; i < f.size(); ++i) compliance += u[i]*f[i];
+    // for (const auto& r : res) compliance += r.displacement.transpose() * r.force;
     // std::cout << compliance << std::endl;
+    
+    // Display undeformed structure
+    display(structure);
+    
+    // Save to vtu for paraview
+    write_vtu(structure, results, "test.vtu");
+
+    write_graphviz(std::cout, structure, make_joint_properties_writer(structure));
+
+    // Check Path [1]--[6] using BFS (truss3d.dot --> EXPECT TRUE)
+    auto path_1_6 = eva::utils::check_path(0, 5, structure);
+
+    
+    // Check Path [1]--[7] using BFS (truss3d.dot --> EXPECT FALSE)
+    auto path_1_7 = eva::utils::check_path(1, 6, structure);
+
+    std::cout << std::boolalpha;
+    std::cout << "Path 1--6 ? " << path_1_6 << "\n";
+    std::cout << "Path 1--7 ? " << path_1_7 << "\n";
+    // Check Path [1]--[6] using DFS
+    
+    // Print properties (test)
+    // auto ugrid = to_vtk_unstructured_grid(structure);
+    // auto * cellData = ugrid->GetCellData();
+    // for (int i = 0; i < cellData->GetNumberOfArrays(); ++i)
+    // {
+    //     vtkDataArray* data = cellData->GetArray(i);
+    //     cout << "name " << data->GetName() << endl;
+    //     for (int j = 0; j < data->GetNumberOfTuples(); ++j)
+    //     {
+    //         double value = data->GetTuple1(i);
+    //         cout << "  value " << j << "th is " << value << endl;
+    //     }
+    // 
 
     // // Retrieve element member forces
     // auto element        = decltype(structure)::edge_descriptor(); 

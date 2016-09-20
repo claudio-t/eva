@@ -10,7 +10,7 @@
 
 namespace eva {
     
-//####################################### DECLARATIONS #############################################
+//######################################## DECLARATIONS ############################################
 
 //----------------------------------------- Properties -------------------------------------------//
 /// Frame tag type
@@ -21,6 +21,11 @@ template <int N> struct frame_joint;
 
 /// Frame element (edge) properties
 template <int N> struct frame_element;
+
+
+//------------------------------------- Results Assembling ---------------------------------------//
+template <int N>
+struct result<frame_kind<N>>;
 
 
 //-------------------------------------- Frame tag types -----------------------------------------//
@@ -45,14 +50,10 @@ template <int N>
 struct known_terms_assembler<frame_kind<N>>;
 
 
-//------------------------------------- Results Assembling ---------------------------------------//
-template <int N>
-struct result<frame_kind<N>>;
 
+//######################################## DEFINITIONS #############################################
 
-//####################################### DEFINITIONS ##############################################
-
-//--------------------------------------- Properties ---------------------------------------------//
+//---------------------------------------- Properties --------------------------------------------//
 template <int N> struct frame_kind
 {         
     constexpr static int ndof = 3*(N-1); // #(tot DOF)
@@ -67,7 +68,7 @@ template <int N> struct frame_joint
     constexpr static int sdim = frame_kind<N>::sdim;
     constexpr static int rdim = frame_kind<N>::rdim;
     
-    fixed_vector<sdim> coords; ///< Joint coordinates
+    fixed_vector<sdim> coords; ///< Joint coordinates [m]
     fixed_vector<sdim> load;   ///< Nodal load [N]
     fixed_vector<rdim> torque; ///< Nodal torque [Nm]
     fixed_vector<ndof> bcs;    ///< Boundary conditions [[displ.s], [rot.s]]
@@ -103,8 +104,40 @@ template <> struct frame_element<3>
 };
 
 
+//------------------------------------- Results Assembling ---------------------------------------//
+template <int N>
+struct result<frame_kind<N>>
+{
+    constexpr static int ndof = frame_kind<N>::ndof;
+    constexpr static int sdim = frame_kind<N>::sdim;
+    constexpr static int rdim = frame_kind<N>::rdim;
+    
+    fixed_vector<sdim> displacement;
+    fixed_vector<rdim> rotation;
+    fixed_vector<sdim> reaction;
+    fixed_vector<rdim> react_torque;
+    
+    // Initialize members
+    result(const fixed_vector<ndof>& u,
+           const fixed_vector<ndof>& f,
+           const frame_joint<N>& p)
+        : displacement(u.head(sdim))
+        , rotation    (u.tail(rdim))
+        , reaction    (f.head(sdim))
+        , react_torque(f.tail(rdim))
+    {        
+        // Keep reaction only if there is no load applied
+        if (p.load != fixed_vector<sdim>::Zero())
+            reaction = fixed_vector<sdim>::Zero();
+        
+        // Keep torque reaction only if there is no load applied
+        if (p.torque != fixed_vector<rdim>::Zero())
+            reaction = fixed_vector<sdim>::Zero();
+    }
+};
 
-//------------------------------------- Problem Assembling ---------------------------------------//
+
+//-------------------------------------- Problem Assembling --------------------------------------//
 template <> 
 struct element_matrix_assembler<frame_kind<2>> 
 {
@@ -230,19 +263,23 @@ struct known_terms_assembler<frame_kind<N>>
     {
         
         // Aux vars
-        const static size_t ndof = S::graph_bundled::ndof;
+        const static size_t ndof = kind_of<S>::type::ndof;
         
         // Init ret var
+# pragma clang diagnostic push
+# pragma clang diagnostic ignored "-Wmissing-braces"
         auto ret = std::array<dense_vector, 2> {dense_vector(n_f),
                                                 dense_vector(n_b)};
-                                                
+# pragma clang diagnostic pop
+        
         auto& f_f = std::get<0>(ret);   // Force vector (Free DOF only)
         auto& u_b = std::get<1>(ret);   // Displacement vector (BC DOF only)
         
         size_t pos_f = 0u;     // f_f incremental iterator
         size_t pos_u = n_b;    // u_b decremental iterator
         
-        for (auto v : make_iterator_range(vertices(s))) {
+        for (auto v : make_iterator_range(vertices(s)))
+        {
             // Get bcs, loads and torques
             const auto& bcs    = s[v].bcs;
             const auto& load   = s[v].load;
@@ -259,7 +296,8 @@ struct known_terms_assembler<frame_kind<N>>
             // ...
             
             // Fill known term vectors
-            for (size_t i = 0u; i < ndof; ++i) {
+            for (size_t i = 0u; i < ndof; ++i)
+            {
                 // If free DOF => write to f & post-increase position
                 if (std::isnan(bcs(i)))
                     f_f(pos_f++) = rhs_v(i);
@@ -275,27 +313,6 @@ struct known_terms_assembler<frame_kind<N>>
 
 
 
-//------------------------------------- Results Assembling ---------------------------------------//
-template <int N>
-struct result<frame_kind<N>>
-{
-    constexpr static int ndof = frame_kind<N>::ndof;
-    constexpr static int sdim = frame_kind<N>::sdim;
-    constexpr static int rdim = frame_kind<N>::rdim;
-    
-    fixed_vector<sdim> displacement;
-    fixed_vector<rdim> rotation;
-    fixed_vector<sdim> force;
-    fixed_vector<rdim> torque;
-    
-    // Initialize members
-    result(const fixed_vector<ndof>& u, const fixed_vector<ndof>& f)
-        : displacement(u.head(sdim))
-        , rotation    (u.tail(rdim))
-        , force       (f.head(sdim))
-        , torque      (f.tail(rdim))
-    {}
-};
 
 } //end namespace eva
 

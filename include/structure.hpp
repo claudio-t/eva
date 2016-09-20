@@ -8,7 +8,8 @@
 
 // std
 # include <array>
-/* remove me! */ # include <chrono> /* remove me! */
+// /* remove me! */ # include <chrono> /* remove me! */
+// /* remove me! */ # include <iostream> /* remove me! */
 // boost
 # include <boost/graph/adjacency_list.hpp>
 # include <boost/graph/graph_traits.hpp>
@@ -81,7 +82,7 @@ template <
     typename Kind = void, typename Structure
     >
 auto
-solve(const Structure& s, Params p = Params());
+solve(const Structure& structure, Params p = Params());
 
 /// Generic solver functor: has to be specialized for every kind of structure
 template <typename StructureKind, typename Params>
@@ -96,7 +97,7 @@ assemble_stiffness_matrix(const S& s, const std::vector<index_t>& dofmap,
                           const size_t n_f, const size_t n_b);
 
 /// Functor that assembles the system stiffness matrix. 
-/// Has to be specialized for every structure type
+/// Has to be specialized for every kind of structure.
 template <typename AlgebraType> 
 struct stiffness_matrix_assembler;
 
@@ -107,17 +108,18 @@ std::array<dense_vector, 2>
 assemble_known_terms(const S& s, const size_t n_f, const size_t n_b);
 
 /// Functor that assembles the element (local) stiffness matrix. 
-/// Has to be specialized for every kind of structure
+/// Has to be specialized for every kind of structure.
 template <typename StructureKind> 
 struct element_matrix_assembler;
 
 /// Assembles the element (local) stiffness matrix
 template <typename Structure> 
 auto
-assemble_element_matrix(const typename Structure::edge_descriptor& e, const Structure& s);
+assemble_element_matrix(const typename Structure::edge_descriptor& e,
+                        const Structure& s);
 
 /// Functor that assembles the known terms vectors (source term and BCs related DOF).
-/// Has to be specialized for every kind of structure
+/// Has to be specialized for every kind of structure.
 template <typename StructureKind> 
 struct known_terms_assembler;
 
@@ -132,7 +134,8 @@ build_global_dofmap(const S& s);
 /// Builds the (element) local to global DOF map
 template <int N> 
 fixed_vector<2*N, index_t> 
-build_local_to_global_dofmap(index_t na, index_t nb, const std::vector<index_t>& dm);
+build_local_to_global_dofmap(const index_t idx_a, const index_t idx_b,
+                             const std::vector<index_t>& dm);
 
 /// Count number of non-zero entries of the stiffness matrix submatrices K_ff, K_fb, K_bb
 template <typename S>
@@ -155,12 +158,11 @@ struct result;
 
 /// Assembles the output of the solving procedure for a generic
 /// given structure.
-template <typename StructureKind>
+template <typename StructureKind, typename Structure>
 std::vector<result<StructureKind>>
-assemble_results(
-    const dense_vector& u,
-    const dense_vector& f,
-    const std::vector<index_t>& dofmap);
+assemble_results(const dense_vector& u,
+                 const dense_vector& f,
+                 const Structure& s);
 
 
 //-------------------------------------- Post-processing -----------------------------------------//
@@ -176,16 +178,35 @@ template <typename StructureKind>
 struct internal_forces_getter;
 
 
+//---------------------------------------- Type helpers -----------------------------------------//
+/// Trait used to recognize the kind of a given structure
+template <typename S>
+struct kind_of;
+
+/// Trait used to recognize the joint (vertex properties) type of a given structure
+template <typename S>
+struct joint_of;
+
+/// Trait used to recognize the element (edge properties) type of a given structure
+template <typename S>
+struct element_of;
+
+/// Trait used to recognize the result type of a given structure
+template <typename S>
+struct result_of;
+
+
+
 //######################################## Definitions #############################################      
 //-------------------------------------- Problem Solving -----------------------------------------//
-template <typename Params, typename Kind, typename Structure>
+template <typename Params, typename Kind, typename S>
 auto
-solve(const Structure& s, Params p) 
+solve(const S& s, Params p) 
 {
     // If Kind is void use Structure kind, else directly use Kind
     using kind_t = typename std::conditional< 
         std::is_void<Kind>::value, 
-        typename Structure::graph_bundled, Kind
+        typename kind_of<S>::type, Kind
         >::type;
                     
     return solver<kind_t, Params>()(s);
@@ -203,7 +224,7 @@ template <typename StructureKind, typename Params>
 struct solver 
 {    
     using algebra_t = typename Params::algebra_t;
-    using  solver_t = typename  Params::solver_t;
+    using solver_t  = typename Params::solver_t;
     
     template <class S>
     auto
@@ -227,7 +248,7 @@ struct solver
         std::tie(dofmap, n_f, n_b) = build_global_dofmap(s);
         
         // Timing
-        auto start1 = std::chrono::high_resolution_clock::now();
+        // auto start1 = std::chrono::high_resolution_clock::now();
         //
         
         // Assemble system stiffness matrices (in global coordinates)
@@ -235,50 +256,50 @@ struct solver
         const auto& K_ff = std::get<0>(matrices);
         const auto& K_fb = std::get<1>(matrices);
         const auto& K_bb = std::get<2>(matrices);
-        //~ const sparse_matrix K_ff = std::get<0>(matrices).sparseView();
-        //~ const sparse_matrix K_fb = std::get<1>(matrices).sparseView();
-        //~ const sparse_matrix K_bb = std::get<2>(matrices).sparseView();
+        // const sparse_matrix K_ff = std::get<0>(matrices).sparseView();
+        // const sparse_matrix K_fb = std::get<1>(matrices).sparseView();
+        // const sparse_matrix K_bb = std::get<2>(matrices).sparseView();
         
         // Assemble known terms (in global coordinates)
         auto known_terms = assemble_known_terms(s, n_f, n_b);
-        const auto& f_f = std::get<0>(known_terms); // displacements on BC nodes
-        const auto& u_b = std::get<1>(known_terms); // applied loads
+        const dense_vector& f_f = std::get<0>(known_terms); // displacements on BC nodes
+        const dense_vector& u_b = std::get<1>(known_terms); // applied loads
         
         // Timing
-        auto end1 = std::chrono::high_resolution_clock::now();
-        auto elapsed_time1 = std::chrono::duration<double,std::micro>(end1-start1);
-        std::cout << "Assembling time = " << elapsed_time1.count() << std::endl;
-        //
+        // auto end1 = std::chrono::high_resolution_clock::now();
+        // auto elapsed_time1 = std::chrono::duration<double,std::micro>(end1-start1);
+        // std::cout << "Assembling time = " << elapsed_time1.count() << std::endl;
+        // //
         
         // Timing
-        auto start2 = std::chrono::high_resolution_clock::now();
+        // auto start2 = std::chrono::high_resolution_clock::now();
         //
         // Solve condensed system:
         // K_ff * u_f = f_f - K_fb * u_b
         solver_t eigen_solver(K_ff);
-        auto u_f = eigen_solver.solve(f_f - K_fb * u_b);
+        dense_vector rhs = f_f - K_fb * u_b;
+        dense_vector u_f = eigen_solver.solve(rhs);
         
         // Timing
-        auto end2 = std::chrono::high_resolution_clock::now();
-        auto elapsed_time2 = std::chrono::duration<double,std::micro>(end2-start2);
-        std::cout << "Solving time = " << elapsed_time2.count() << std::endl;
+        // auto end2 = std::chrono::high_resolution_clock::now();
+        // auto elapsed_time2 = std::chrono::duration<double,std::micro>(end2-start2);
+        // std::cout << "Solving time = " 
+                  // << elapsed_time2.count() << std::endl;
         //
         
         // Compute reactions on BC DOF:
         // f_b = K_bf * u_f + K_bb * u_b
-        auto f_b = K_fb.transpose() * u_f + K_bb * u_b;
+        dense_vector f_b = K_fb.transpose() * u_f + K_bb * u_b;
         
         // Asemble displacement and force vectors 
         // using the original DOF ordering
-        auto uu = merge_and_reorder(u_f, u_b, dofmap);
-        auto ff = merge_and_reorder(f_f, f_b, dofmap);
-
+        dense_vector uu = merge_and_reorder(u_f, u_b, dofmap);
+        dense_vector ff = merge_and_reorder(f_f, f_b, dofmap);
         // auto uu = dense_vector(n_f + n_b);
         // uu << std::move(u_f), std::move(u_b);
         // reorder(uu, dofmap, n_f);
 
-        return assemble_results<StructureKind>(uu, ff, dofmap);
-        // return std::make_pair(std::move(uu), std::move(ff));
+        return assemble_results<StructureKind>(uu, ff, s);
     }
 };
 
@@ -288,7 +309,7 @@ template <typename S>
 auto
 assemble_element_matrix(const typename S::edge_descriptor& e, const S& s) 
 {
-    return element_matrix_assembler<typename S::graph_bundled>()(e, s);
+    return element_matrix_assembler<typename kind_of<S>::type>()(e, s);
 }
 
 template <typename StructureKind> 
@@ -307,7 +328,7 @@ template <typename S>
 std::array<dense_vector, 2>
 assemble_known_terms(const S& s, const size_t n_f, const size_t n_b) 
 {
-    return known_terms_assembler<typename S::graph_bundled>()(s, n_f, n_b);
+    return known_terms_assembler<typename kind_of<S>::type>()(s, n_f, n_b);
 }
 
 template <typename StructureKind>
@@ -354,7 +375,7 @@ struct stiffness_matrix_assembler<dense_algebra_t>
     operator()(const S& s, const std::vector<index_t>& dofmap,
                              const size_t n_f, const size_t n_b)
     {
-        const static size_t dim = S::graph_bundled::ndof;
+        constexpr size_t dim = kind_of<S>::type::ndof;
         
         // Init SYSTEM SUB-matrices
         dense_matrix K_ff = dense_matrix::Zero(n_f, n_f);
@@ -376,8 +397,8 @@ struct stiffness_matrix_assembler<dense_algebra_t>
             
             // Compose SYSTEM submatrices
             for (size_t i = 0; i < 2*dim; ++i)
-                for (size_t j = 0; j < 2*dim; ++j) {
-                    
+                for (size_t j = 0; j < 2*dim; ++j)
+                {    
                     auto ii = loc_to_glob(i);
                     auto jj = loc_to_glob(j);
                     
@@ -393,7 +414,10 @@ struct stiffness_matrix_assembler<dense_algebra_t>
                     }
                 }
         }
+# pragma clang diagnostic push
+# pragma clang diagnostic ignored "-Wmissing-braces"
         return {std::move(K_ff), std::move(K_fb), std::move(K_bb)};
+# pragma clang diagnostic pop
     }
 };
 
@@ -406,7 +430,7 @@ struct stiffness_matrix_assembler<sparse_algebra_t>
                              const size_t n_f, const size_t n_b)
     {
         return triplets_impl(s, dofmap, n_f, n_b);
-        //~ return matrices_impl(s, dofmap, n_f, n_b);
+        // return matrices_impl(s, dofmap, n_f, n_b);
     }
     
     template <typename S>
@@ -414,28 +438,26 @@ struct stiffness_matrix_assembler<sparse_algebra_t>
     triplets_impl(const S& s, const std::vector<index_t>& dofmap,
                  const size_t n_f, const size_t n_b)
     {
-        const static size_t dim = S::graph_bundled::ndof; 
+        constexpr size_t dim = kind_of<S>::type::ndof; 
         
         // Compute number of non-zero entries for each matrix
         auto nnzs = count_nnz_entries(s, dofmap, n_f, n_b);
 
         auto nnz_tot = std::array<size_t, 3> ();
         for (size_t i = 0u; i < 3u; ++i)
-            std::accumulate(begin(nnzs[i]), end(nnzs[i]), 0u);
+        {
+            nnz_tot[i] = std::accumulate(begin(nnzs[i]), end(nnzs[i]), 0u);
+        }
 
         // Allocate Triplet lists reserving the required space
         using triplet_list_t = std::vector<Eigen::Triplet<real>>;
-        auto triplet_lists = std::array<triplet_list_t, 3> ();
-        for (size_t idx = 0u; idx < 3u; ++idx) 
-            triplet_lists[idx].reserve(nnz_tot[idx]);
-
-        auto& K_ff_list = std::get<0>(triplet_lists); 
-        auto& K_fb_list = std::get<1>(triplet_lists);
-        auto& K_bb_list = std::get<2>(triplet_lists);
+        auto K_ff_list = triplet_list_t(nnz_tot[0]); 
+        auto K_fb_list = triplet_list_t(nnz_tot[1]);
+        auto K_bb_list = triplet_list_t(nnz_tot[2]);
         
         // Loop over all edges
-        for (auto&& e : make_iterator_range(edges(s))) {
-            
+        for (auto&& e : make_iterator_range(edges(s)))
+        {    
             // Get node indexes
             auto na = source(e, s);
             auto nb = target(e, s);
@@ -448,8 +470,8 @@ struct stiffness_matrix_assembler<sparse_algebra_t>
         
             // Compose SYSTEM submatrices
             for (size_t i = 0; i < 2*dim; ++i)
-                for (size_t j = 0; j < 2*dim; ++j) {
-                    
+                for (size_t j = 0; j < 2*dim; ++j)
+                {                    
                     auto ii = loc_to_glob(i);
                     auto jj = loc_to_glob(j);
                     
@@ -465,12 +487,17 @@ struct stiffness_matrix_assembler<sparse_algebra_t>
                     }
                 }
         }
-        
+# pragma clang diagnostic push
+# pragma clang diagnostic ignored "-Wmissing-braces"
+        // Gather lists
+        auto triplet_lists = std::array<triplet_list_t, 3> {K_ff_list, K_fb_list, K_bb_list};
+
         // Allocate empty submatrices reserving the required space
         auto matrices = std::array<sparse_matrix, 3> {
             sparse_matrix(n_f, n_f),
             sparse_matrix(n_f, n_b),
             sparse_matrix(n_b, n_b)};
+# pragma clang diagnostic pop
         
         for (size_t idx = 0u; idx < dim; ++idx)
             matrices[idx].setFromTriplets(triplet_lists[idx].begin(), triplet_lists[idx].end());
@@ -486,16 +513,20 @@ struct stiffness_matrix_assembler<sparse_algebra_t>
     matrices_impl(const S& s, const std::vector<index_t>& dofmap,
                   const size_t n_f, const size_t n_b)
     {    
-        const static size_t dim = S::graph_bundled::ndof; 
+        constexpr size_t dim = kind_of<S>::type::ndof; 
             
         // Compute number of non-zero entries for each matrix
         auto nnzs = count_nnz_entries(s, dofmap, n_f, n_b);
         
         // Init submatrices
+# pragma clang diagnostic push
+# pragma clang diagnostic ignored "-Wmissing-braces"
         auto matrices = std::array<sparse_matrix, 3> {
             sparse_matrix(n_f, n_f), 
             sparse_matrix(n_f, n_b), 
             sparse_matrix(n_b, n_b) }; 
+# pragma clang diagnostic pop
+        
         // Reserve exactly the required space
         for (size_t idx = 0u; idx < dim; ++idx) 
             matrices[idx].reserve(nnzs[idx]);
@@ -505,8 +536,8 @@ struct stiffness_matrix_assembler<sparse_algebra_t>
         auto& K_bb = std::get<2>(matrices);
         
         // Loop over all edges
-        for (auto&& e : make_iterator_range(edges(s))) {
-            
+        for (auto&& e : make_iterator_range(edges(s)))
+        {    
             // Get node indexes
             auto na = source(e, s);
             auto nb = target(e, s);
@@ -519,8 +550,8 @@ struct stiffness_matrix_assembler<sparse_algebra_t>
         
             // Compose SYSTEM submatrices
             for (size_t i = 0; i < 2*dim; ++i)
-                for (size_t j = 0; j < 2*dim; ++j) {
-                    
+                for (size_t j = 0; j < 2*dim; ++j)
+                {    
                     auto ii = loc_to_glob(i);
                     auto jj = loc_to_glob(j);
                     
@@ -544,12 +575,12 @@ struct stiffness_matrix_assembler<sparse_algebra_t>
 };
 
  
-// -- DOF Handling -- //
+//---------------------------------------- DOF handling ------------------------------------------//
 template <typename S>
 std::tuple<std::vector<index_t>, size_t, size_t>
 build_global_dofmap(const S& s) 
 {
-    const static size_t dim = S::graph_bundled::ndof;
+    constexpr size_t dim = kind_of<S>::type::ndof;
     
     // Initialize the DOF map
     size_t n_verts = num_vertices(s);
@@ -563,7 +594,8 @@ build_global_dofmap(const S& s)
         // Get BC field
         const auto& bcs = s[v].bcs;
         
-        for (size_t i = 0u; i < dim; ++i) {
+        for (size_t i = 0u; i < dim; ++i)
+        {
             // If coordinate = NaN => Free DOF else BC DOF
             if (std::isnan(bcs[i])) {
                 // Put DOF at the beginning
@@ -587,19 +619,24 @@ count_nnz_entries(const S& s, const std::vector<index_t>& dofmap,
                   const size_t n_f, const size_t n_b) 
 {    
     // Aux vars
-    const static size_t dim = S::graph_bundled::ndof;
+    constexpr size_t dim = kind_of<S>::type::ndof;
     
     // Init return variables
-    auto ret = std::array<std::vector<size_t>, 3> {
-        std::vector<size_t>(n_f),
-        std::vector<size_t>(n_f), 
-        std::vector<size_t>(n_b)};
-    auto& nnz_ff = std::get<0>(ret);    // #(non-zero entries) of K_ff rows
-    auto& nnz_fb = std::get<1>(ret);    // #(non-zero entries) of K_fb rows
-    auto& nnz_bb = std::get<2>(ret);    // #(non-zero entries) of K_bb rows
+// # pragma clang diagnostic push
+// # pragma clang diagnostic ignored "-Wmissing-braces"
+//     auto ret = std::array<std::vector<size_t>, 3> {
+//         std::vector<size_t>(n_f),
+//         std::vector<size_t>(n_f), 
+//         std::vector<size_t>(n_b)};
+// # pragma clang diagnostic pop
+
+    auto nnz_ff = std::vector<size_t>(n_f); // #(non-zero entries) of K_ff rows
+    auto nnz_fb = std::vector<size_t>(n_f); // #(non-zero entries) of K_fb rows
+    auto nnz_bb = std::vector<size_t>(n_b); // #(non-zero entries) of K_bb rows
     
     // For each vertex
-    for (auto&& v : make_iterator_range(vertices(s))) {
+    for (auto&& v : make_iterator_range(vertices(s)))
+    {
         // #(non-zero entries) associated to vertex DOF 
         size_t nr_f = 0u;
         size_t nr_b = 0u;
@@ -607,7 +644,8 @@ count_nnz_entries(const S& s, const std::vector<index_t>& dofmap,
         // Check if DOF is free or restrained (BC)
         auto dofs = s[v].bcs;
         // Loop on current vertex DOF
-        for (size_t i = 0u; i < dim; ++i) {
+        for (size_t i = 0u; i < dim; ++i)
+        {
             // If nan =>  BC DOF  => increase bc non-zero entries count 
             if (std::isnan(dofs[i])) ++nr_b;
             //  Else  => free DOF => increase free non-zero entries count
@@ -619,7 +657,8 @@ count_nnz_entries(const S& s, const std::vector<index_t>& dofmap,
             // Check if DOF is free or restrained (BC) 
             auto bcs = s[nn].bcs;
             // Loop on bcs
-            for (size_t j = 0u; j < dim; ++j) {
+            for (size_t j = 0u; j < dim; ++j)
+            {
                 // If nan =>  BC DOF  => increase bc non-zero entries count 
                 if (std::isnan(bcs[j])) ++nr_b;
                 //  Else  => free DOF => increase free non-zero entries count
@@ -628,7 +667,8 @@ count_nnz_entries(const S& s, const std::vector<index_t>& dofmap,
         }
         
         // Now for each DOF belonging to the current vertex
-        for (size_t dof = 0u; dof < dim; ++dof) {
+        for (size_t dof = 0u; dof < dim; ++dof)
+        {
             auto ii = dofmap[dof];
             if (ii < n_f) {
                 // Write #(nnz entries) of K_ff and K_fb
@@ -637,49 +677,55 @@ count_nnz_entries(const S& s, const std::vector<index_t>& dofmap,
                 
             }
             else {
-                // Write #(nnz entries) of K_ff and K_fb
+                // Write #(nnz entries) of K_bb and K_bf
                 nnz_bb[ii-n_f] = nr_b;
                 //nnz_bf[ii-nf] = nr_f;
             }
         }
     }
+# pragma clang diagnostic push
+# pragma clang diagnostic ignored "-Wmissing-braces"
     // #(non-zero entries) of (K_ff, K_fb, K_bb)
-    return ret;
+    return {std::move(nnz_ff), std::move(nnz_fb), std::move(nnz_bb)};
+# pragma clang diagnostic pop
 }
 
 
 
 template <int N> 
 fixed_vector<2*N, index_t> 
-build_local_to_global_dofmap(index_t na, index_t nb, const std::vector<index_t>& dm) 
+build_local_to_global_dofmap(const index_t idx_a, const index_t idx_b,
+                             const std::vector<index_t>& dm) 
 {    
     auto ret = fixed_vector<2*N, index_t> ();
     
-    for (auto i = 0; i < N; ++i) {
-        ret(i)   = dm[N*na + i];    // Node A -> positions from 0 to  N-1
-        ret(i+N) = dm[N*nb + i];    // Node B -> positions from N to 2N-1
+    for (auto i = 0; i < N; ++i)
+    {
+        ret(i)   = dm[N*idx_a + i];    // Node A -> positions from 0 to  N-1
+        ret(i+N) = dm[N*idx_b + i];    // Node B -> positions from N to 2N-1
     }
     
     return ret;
 }
 
 
-
+inline
 dense_vector
 merge_and_reorder(const dense_vector& v_f, 
                   const dense_vector& v_b, 
                   const std::vector<index_t>& dofmap) 
 {
     // DOF sizes
-    size_t n_f = v_f.size();  // Free DOF
-    size_t n_b = v_b.size();  // BC DOF
+    size_t n_f = v_f.size(); // Free DOF
+    size_t n_b = v_b.size(); // BC DOF
     size_t n_t = n_f + n_b;  // Tot nr of DOF
 
     // Pre-allocate return variable
     auto rv = dense_vector(n_t);
 
     // For each DOF
-    for (size_t i = 0u; i < n_t; ++i) {
+    for (size_t i = 0u; i < n_t; ++i)
+    {
         // Retrieve mapped position
         auto ii = dofmap[i];
         // Fill position by picking the value from the proper vector
@@ -689,46 +735,51 @@ merge_and_reorder(const dense_vector& v_f,
 }
 
 
-dense_vector
-reorder(const dense_vector& v, const std::vector<index_t>& dofmap)
-{
-    // Pre-allocate results
-    auto n_t = v.size();
-    auto rv  = dense_vector(n_t);
+// dense_vector
+// reorder(const dense_vector& v, const std::vector<index_t>& dofmap)
+// {
+//     // Pre-allocate results
+//     auto n_t = v.size();
+//     auto rv  = dense_vector(n_t);
     
-    // Reorder
-    for (size_t i = 0u; i < n_t; ++i)
-        rv[i] = v[dofmap[i]];
+//     // Reorder
+//     for (size_t i = 0u; i < n_t; ++i)
+//         rv[i] = v[dofmap[i]];
     
-    return rv;
-}
+//     return rv;
+// }
 
 
 
 //------------------------------------- Results Assembling ---------------------------------------//
-template <typename StructureKind>
+template <typename StructureKind, typename Structure>
 std::vector<result<StructureKind>>
 assemble_results(
     const dense_vector& u,
     const dense_vector& f,
-    const std::vector<index_t>& dofmap)
+    const Structure& s)
 {
     // Aux vars
     constexpr static int n_loc_dof = StructureKind::ndof;
-    auto n_nodes = dofmap.size() / n_loc_dof;
+    const auto n_nodes = num_vertices(s);
     
     // Pre-allocate results
     typedef result<StructureKind> result_t;
     auto results = std::vector<result_t> ();
     results.reserve(n_nodes);
 
-    // For each joint/node
-    for(size_t node_it = 0u; node_it < n_nodes*n_loc_dof; node_it += n_loc_dof) {
+    // For each joint (node)
+    // for(size_t node_it = 0u; node_it < n_nodes*n_loc_dof; node_it += n_loc_dof)
+    for (size_t node_it = 0u; node_it < n_nodes; ++node_it)
+    {
+        // Get current node starting index in u and f
+        size_t node_start_idx = node_it * n_loc_dof;
+        
         // Assemble the corresponding results
-        results.emplace_back(result_t(u.segment<n_loc_dof>(node_it),
-                                      f.segment<n_loc_dof>(node_it)));
-    }
-    
+        results.emplace_back(result_t(u.segment<n_loc_dof>(node_start_idx),
+                                      f.segment<n_loc_dof>(node_start_idx),
+                                      s[node_it]));
+    }    
     return results;
 }
 
@@ -753,9 +804,34 @@ auto
 get_internal_forces(const typename S::edge_descriptor& e, const S& s, 
                     const std::vector<real>& u, const std::vector<real>& f) 
 {
-    return internal_forces_getter<typename S::graph_bundled>()(e, s, u, f);
+    return internal_forces_getter<typename kind_of<S>::type>()(e, s, u, f);
 }
 
+
+//---------------------------------------- Type helpers -----------------------------------------//
+template <typename S>
+struct kind_of
+{
+    using type = typename S::graph_bundled;
+};
+
+template <typename S>
+struct joint_of
+{
+    using type = typename S::vertex_bundled;
+};
+
+template <typename S>
+struct element_of
+{
+    using type = typename S::edge_bundled;
+};
+    
+template <typename S>
+struct result_of
+{
+    using type = result<typename kind_of<S>::type>;
+};
 
 
 } // end namespace eva

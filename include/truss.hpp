@@ -9,6 +9,7 @@
 # include "structure.hpp"
 
 
+
 namespace eva {
     
 //####################################### DECLARATIONS #############################################
@@ -32,6 +33,11 @@ using truss2d = generic_structure<truss_joint<2>, truss_element<2>, truss_kind<2
 using truss3d = generic_structure<truss_joint<3>, truss_element<3>, truss_kind<3>>;
 
 
+//------------------------------------- Results Assembling ---------------------------------------//
+template <int N>
+struct result<truss_kind<N>>;
+
+
 //-------------------------------------- Post-processing -----------------------------------------//
 template <int N> 
 struct internal_forces_getter<truss_kind<N>>;
@@ -50,10 +56,6 @@ struct element_matrix_assembler<truss_kind<3>>;
 template <int N>
 struct known_terms_assembler<truss_kind<N>>;
 
-
-//------------------------------------- Results Assembling ---------------------------------------//
-template <int N>
-struct result<truss_kind<N>>;
 
 
 //####################################### DEFINITIONS ##############################################
@@ -89,18 +91,38 @@ template <int N> struct truss_element
     real A; ///< Cross sectional area [m^2]
 };
 
+//------------------------------------- Results Assembling ---------------------------------------//
+template <int N>
+struct result<truss_kind<N>>
+{
+    constexpr static int ndof = truss_kind<N>::ndof;
+    constexpr static int sdim = truss_kind<N>::sdim;
+    
+    fixed_vector<sdim> displacement;
+    fixed_vector<sdim> reaction;
 
+    result(const fixed_vector<ndof>& u,
+           const fixed_vector<ndof>& f,
+           const truss_joint<N>& p)
+        : displacement(u)
+        , reaction    (f)
+    {
+        // Keep result only if there is no load applied
+        if (p.load != fixed_vector<sdim>::Zero())
+            reaction = fixed_vector<sdim>::Zero();
+    }
+};
 
 //-------------------------------------- Post-processing -----------------------------------------//
 template <int N> 
 struct internal_forces_getter<truss_kind<N>> 
 {
     template <typename S>
-    std::array<fixed_vector<S::graph_bundled::ndof>,2>
+    std::array<fixed_vector<kind_of<S>::type::ndof>,2>
     operator()(const typename S::edge_descriptor& e, const S& s, 
                const std::vector<real>& u, const std::vector<real>& f) 
     {
-        const static size_t ndof = S::graph_bundled::ndof; 
+        const static size_t ndof = kind_of<S>::type::ndof; 
         
         // Get local element matrix
         auto K_el = assemble_element_matrix(e, s);
@@ -118,7 +140,8 @@ struct internal_forces_getter<truss_kind<N>>
         auto q_el  = fixed_vector<2*ndof>(); 
              q_el << s[a].load, s[b].load;
     
-        for (size_t i = 0u; i < ndof; ++i) {
+        for (size_t i = 0u; i < ndof; ++i)
+        {
             // Displacements
             u_el(i)      = u[ndof*a+i];
             u_el(i+ndof) = u[ndof*b+i];
@@ -126,19 +149,20 @@ struct internal_forces_getter<truss_kind<N>>
             q_el(i)      = load_a(i);
             q_el(i+ndof) = load_b(i);
         }
-        std::cout << std::endl;
+        // std::cout << std::endl;
         auto forces = K_el*u_el - q_el;
         
-        std::cout << "K_el:\n" << K_el << std::endl;
-        std::cout << "u_el:\n" << u_el << std::endl;
-        std::cout << "q_el:\n" << q_el << std::endl;
+        // std::cout << "K_el:\n" << K_el << std::endl;
+        // std::cout << "u_el:\n" << u_el << std::endl;
+        // std::cout << "q_el:\n" << q_el << std::endl;
         
         // Fill result
         auto res = std::array<fixed_vector<ndof>,2>{};
         auto& res_a = std::get<0>(res);
         auto& res_b = std::get<1>(res);
         
-        for (size_t i = 0u; i < ndof; ++i) {
+        for (size_t i = 0u; i < ndof; ++i)
+        {
             res_a(i) = forces(i);
             res_b(i) = forces(i+ndof);
         }
@@ -233,23 +257,30 @@ struct known_terms_assembler<truss_kind<N>>
     std::array<dense_vector, 2>
     operator()(const S& s, const size_t n_f, const size_t n_b) 
     {
-        const static int ndof = S::graph_bundled::ndof;   // #DOF per node (2D => 3, 3D => 6) 
-        auto ret = std::array<dense_vector, 2> {dense_vector(n_f),
-                                                dense_vector(n_b)};
-                                                
+        // Aux vars
+        const static int ndof = kind_of<S>::type::ndof;   // #DOF per node (2D => 3, 3D => 6) 
+
+        // Init return var
+# pragma clang diagnostic push
+# pragma clang diagnostic ignored "-Wmissing-braces"
+        auto ret = std::array<dense_vector, 2> {dense_vector(n_f), dense_vector(n_b)};
+# pragma clang diagnostic pop
+        
         auto& f_f = std::get<0>(ret);   // Force vector (Free DOF only)
         auto& u_b = std::get<1>(ret);   // Displacement vector (BC DOF only)
         
         size_t pos_f = 0u;     // f_f incremental iterator
         size_t pos_u = n_b;    // u_b decremental iterator
         
-        for (auto v : make_iterator_range(vertices(s))) {
+        for (auto v : make_iterator_range(vertices(s)))
+        {
             // Get bcs & loads
             const auto& bcs  = s[v].bcs;
             const auto& load = s[v].load;
             
             // Loop on spatial components
-            for (size_t i = 0u; i < ndof; ++i) {
+            for (size_t i = 0u; i < ndof; ++i)
+            {
                 // If free DOF => write to f & post-increase position
                 if (std::isnan(bcs(i)))
                     f_f(pos_f++) = load(i);
@@ -261,29 +292,6 @@ struct known_terms_assembler<truss_kind<N>>
         return ret;
     }
 };
-
-
-
-//------------------------------------- Results Assembling ---------------------------------------//
-template <int N>
-struct result<truss_kind<N>>
-{
-    constexpr static int ndof = truss_kind<N>::ndof;
-    constexpr static int sdim = truss_kind<N>::sdim;
-    
-    fixed_vector<sdim> displacement;
-    fixed_vector<sdim> force;
-
-    result(const fixed_vector<ndof>& u, const fixed_vector<ndof>& f)
-        : displacement(u.head(sdim))
-        , force       (f.head(sdim))
-    {}
-    // result(fixed_vector<ndof>&& u, fixed_vector<ndof>&& f)
-    //     : displacement(std::move(u.segment<sdim>(0)))
-    //     , force       (std::move(f.segment<sdim>(0)))
-    // {}
-};
-
 
     
 } //end namespace eva
