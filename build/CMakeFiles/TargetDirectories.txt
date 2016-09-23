@@ -1,4 +1,0 @@
-/home/claudio/eva/build/pagmo/bridge/CMakeFiles/bridge.dir
-/home/claudio/eva/build/tests/main/CMakeFiles/eva.dir
-/home/claudio/eva/build/tests/frame2d/CMakeFiles/frame2d.dir
-/home/claudio/eva/build/tests/truss2d/CMakeFiles/truss2d.dir
