@@ -2,7 +2,6 @@
 # include "truss.hpp"
 # include "frame.hpp"
 # include "io.hpp"
-# include "utils.hpp"
 
 int main(int argc, char * argv [])
 {

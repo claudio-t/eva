@@ -9,7 +9,7 @@
 // std
 # include <array>
 // /* remove me! */ # include <chrono> /* remove me! */
-// /* remove me! */ # include <iostream> /* remove me! */
+/* remove me! */ # include <iostream> /* remove me! */
 // boost
 # include <boost/graph/adjacency_list.hpp>
 # include <boost/graph/graph_traits.hpp>
@@ -247,10 +247,6 @@ struct solver
         size_t n_f, n_b;
         std::tie(dofmap, n_f, n_b) = build_global_dofmap(s);
         
-        // Timing
-        // auto start1 = std::chrono::high_resolution_clock::now();
-        //
-        
         // Assemble system stiffness matrices (in global coordinates)
         auto matrices = assemble_stiffness_matrix<algebra_t>(s, dofmap, n_f, n_b);
         const auto& K_ff = std::get<0>(matrices);
@@ -264,28 +260,20 @@ struct solver
         auto known_terms = assemble_known_terms(s, n_f, n_b);
         const dense_vector& f_f = std::get<0>(known_terms); // displacements on BC nodes
         const dense_vector& u_b = std::get<1>(known_terms); // applied loads
+
+        // Print matrices & vectors in DENSE format
+        // std::cout << "K_ff:\n" << dense_matrix(K_ff) << "\n\n";
+        // std::cout << "K_fb:\n" << dense_matrix(K_fb) << "\n\n";
+        // std::cout << "K_bb:\n" << dense_matrix(K_bb) << "\n\n";
+        // std::cout << "f_f:\n" << f_f << "\n\n";
+        // std::cout << "u_b:\n" << u_b << "\n\n";
         
-        // Timing
-        // auto end1 = std::chrono::high_resolution_clock::now();
-        // auto elapsed_time1 = std::chrono::duration<double,std::micro>(end1-start1);
-        // std::cout << "Assembling time = " << elapsed_time1.count() << std::endl;
-        // //
-        
-        // Timing
-        // auto start2 = std::chrono::high_resolution_clock::now();
-        //
         // Solve condensed system:
         // K_ff * u_f = f_f - K_fb * u_b
         solver_t eigen_solver(K_ff);
         dense_vector rhs = f_f - K_fb * u_b;
         dense_vector u_f = eigen_solver.solve(rhs);
         
-        // Timing
-        // auto end2 = std::chrono::high_resolution_clock::now();
-        // auto elapsed_time2 = std::chrono::duration<double,std::micro>(end2-start2);
-        // std::cout << "Solving time = " 
-                  // << elapsed_time2.count() << std::endl;
-        //
         
         // Compute reactions on BC DOF:
         // f_b = K_bf * u_f + K_bb * u_b
@@ -295,10 +283,7 @@ struct solver
         // using the original DOF ordering
         dense_vector uu = merge_and_reorder(u_f, u_b, dofmap);
         dense_vector ff = merge_and_reorder(f_f, f_b, dofmap);
-        // auto uu = dense_vector(n_f + n_b);
-        // uu << std::move(u_f), std::move(u_b);
-        // reorder(uu, dofmap, n_f);
-
+        
         return assemble_results<StructureKind>(uu, ff, s);
     }
 };
@@ -357,13 +342,14 @@ struct stiffness_matrix_assembler
 {
     template <typename S>
     void
-    operator()(const S& s, const std::vector<index_t>& dofmap,
-                             const size_t n_f, const size_t n_b)
+    operator()(const S& s,
+               const std::vector<index_t>& dofmap,
+               const size_t n_f, const size_t n_b)
     {
         static_assert(
             std::is_same<S,S>::value, 
             "Algebra type must be either dense_algebra_t or sparse_algebra_t"
-        );
+            );
     }
 };
 
@@ -372,8 +358,9 @@ struct stiffness_matrix_assembler<dense_algebra_t>
 {
     template <typename S>
     std::array<dense_matrix, 3>
-    operator()(const S& s, const std::vector<index_t>& dofmap,
-                             const size_t n_f, const size_t n_b)
+    operator()(const S& s,
+               const std::vector<index_t>& dofmap,
+               const size_t n_f, const size_t n_b)
     {
         constexpr size_t dim = kind_of<S>::type::ndof;
         

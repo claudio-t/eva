@@ -4,6 +4,8 @@
 # include <boost/graph/depth_first_search.hpp>
 # include <boost/graph/breadth_first_search.hpp>
 
+# include <iostream>
+
 namespace eva { namespace utils {
 
 
@@ -47,7 +49,7 @@ make_topology(const std::vector<J>& joints, const F& rule)
     
     for (auto i = 0u; i < nr_joints; ++i)
         for (auto j = 0u; j < nr_joints; ++j)
-            if (i != j && rule(joints[i], joints[j]))
+            if (i < j && rule(joints[i], joints[j]))
                 ret[i].emplace_back(j);
     
     return ret;
@@ -56,8 +58,11 @@ make_topology(const std::vector<J>& joints, const F& rule)
 template <typename S>
 bool is_connected(const S& structure)
 {
+    // Aux vars
+    auto n_verts = num_vertices(structure);
+    
     // Check for non empty structure
-    if (num_vertices(structure) == 0)
+    if (n_verts == 0)
         throw std::runtime_error("Structure must be non-empty!");
     
     // Perform a BFS search
@@ -65,7 +70,7 @@ bool is_connected(const S& structure)
     using color_map_t = std::vector<boost::default_color_type>;
 
     // Allocate colors storage
-    auto colors = color_map_t(num_vertices(structure));
+    auto colors = color_map_t(n_verts);
 
     // Build color map using colors as storage
     auto colors_map = boost::make_iterator_property_map(
@@ -82,10 +87,17 @@ bool is_connected(const S& structure)
                                 colors_map);
 
     // If there exists an unreachable node (color != black)
-    // then the graph is not connected
+    // then the graph is not connected.
+    // NB: isolated nodes does not count
     auto black = boost::color_traits<boost::default_color_type>::black();
-    for (auto color : colors) if (color != black) return false;
-    
+    for (auto v_idx = 0u; v_idx < n_verts; ++v_idx)
+        if (colors[v_idx] != black && out_degree(v_idx, structure) > 0)
+        {
+            // std::cout << "Missing vertex " << v_idx
+            //           << "   color = " << colors[v_idx]
+            //           << std::endl;
+            return false;
+        }
     // Otherwise the graph is connected
     return true;
 }

@@ -2,7 +2,6 @@
 # include "truss.hpp"
 # include "frame.hpp"
 # include "io.hpp"
-# include "utils.hpp"
 
 int main(int argc, char * argv [])
 {
@@ -36,6 +35,11 @@ int main(int argc, char * argv [])
             << std::endl;
 
         std::cout
+            << "Reaction Torque = "
+            << results[idx].react_torque.transpose()
+            << std::endl;
+        
+        std::cout
             << "BCs = "
             << structure[idx].bcs.transpose()
             << std::endl;
@@ -45,6 +49,10 @@ int main(int argc, char * argv [])
             << structure[idx].load.transpose()
             << std::endl;
 
+        std::cout
+            << "Reaction Torque = "
+            << structure[idx].torque.transpose()
+            << std::endl;
         
         std::cout
             << "Coords = "

@@ -1,0 +1,24 @@
+## Add executable ##
+add_executable(bridge "bridge.cpp" ${SRC_DIR}/structural_problem.cpp ${SOURCES})
+
+## Specify libreries that have to be linked to the bin ##
+target_link_libraries(
+  bridge
+  pagmo
+  ${VTK_LIBRARIES}
+  Qt5::Widgets
+  # ${Boost_GRAPH_LIBRARY}
+  ${Boost_THREAD_LIBRARY}
+  ${Boost_SERIALIZATION_LIBRARY}
+  ${Boost_SYSTEM_LIBRARY}
+)
+
+## Set binary output location  ##
+# Do nothing atm
+
+## Set target compiler options ##
+set(DBG_FLAGS "-Wall")
+set(REL_FLAGS "-O3")
+target_compile_options(bridge PUBLIC ${REL_FLAGS} "-g" "-std=c++14" "-pthread" "-DNDEBUG")
+
+

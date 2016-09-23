@@ -2,7 +2,6 @@
 # include "truss.hpp"
 # include "frame.hpp"
 # include "io.hpp"
-# include "graphviz.hpp"
 # include "utils.hpp"
 
 int main(int argc, char * argv [])
@@ -12,50 +11,53 @@ int main(int argc, char * argv [])
         std::cout << "Input file missing!\n";
         return 0;
     }
-
+    
     // Read structure from file
     auto filename  = std::string(argv[1]);
-    auto structure = eva::read_from_graphviz<eva::truss3d>(filename);
+    auto structure = eva::read_from_graphviz<eva::frame2d>(filename);
 
     // Solve structure
     auto results = solve(structure, eva::sparse_solver_params<>());
 
-    // Print displacements
-    std::cout << "-----------------------------------------------" 
-              << std::endl << "Displacements:\n";
-    for (const auto& r : results) std::cout << r.displacement.transpose() << std::endl;
+    // Print properties
+    for (auto idx = 0u; idx < num_vertices(structure); ++idx)
+    {
+        std::cout
+            << "Displacement = "
+            << results[idx].displacement.transpose()
+            << std::endl;
+
+        std::cout
+            << "Reaction = "
+            << results[idx].reaction.transpose()
+            << std::endl;
+
+        std::cout
+            << "BCs = "
+            << structure[idx].bcs.transpose()
+            << std::endl;
+
+        std::cout
+            << "Load = "
+            << structure[idx].load.transpose()
+            << std::endl;
+        
+        std::cout
+            << "Coords = "
+            << structure[idx].coords.transpose()
+            << std::endl;
+        
+        std::cout << std::endl;
+    }
+
+    // Compute compliance
+    auto compliance = 0.;
+    for (size_t vidx = 0u; vidx < num_vertices(structure); ++vidx)
+        compliance += structure[vidx].load.transpose() * results[vidx].displacement;
+    // std::cout << "Compliance = "<< compliance << std::endl;
     
-    // Print reactions
-    std::cout << "-----------------------------------------------" 
-              << std::endl << "Reactions:\n";
-    for (const auto& r : results) std::cout << r.reaction.transpose() << std::endl;
-    
-    // // Compute&print compliance
-    // std::cout << "-----------------------------------------------" 
-    //           << std::endl << "Compliance:\n";
-    // auto compliance = 0.;
-    // for (const auto& r : res) compliance += r.displacement.transpose() * r.force;
-    // std::cout << compliance << std::endl;
-    
-    // Display undeformed structure
+    // Display structure
     display(structure);
-    
-    // Save to vtu for paraview
-    write_vtu(structure, results, "test.vtu");
-
-    write_graphviz(std::cout, structure, make_joint_properties_writer(structure));
-
-    // Check Path [1]--[6] using BFS (truss3d.dot --> EXPECT TRUE)
-    auto path_1_6 = eva::utils::check_path(0, 5, structure);
-
-    
-    // Check Path [1]--[7] using BFS (truss3d.dot --> EXPECT FALSE)
-    auto path_1_7 = eva::utils::check_path(1, 6, structure);
-
-    std::cout << std::boolalpha;
-    std::cout << "Path 1--6 ? " << path_1_6 << "\n";
-    std::cout << "Path 1--7 ? " << path_1_7 << "\n";
-    // Check Path [1]--[6] using DFS
     
     // Print properties (test)
     // auto ugrid = to_vtk_unstructured_grid(structure);

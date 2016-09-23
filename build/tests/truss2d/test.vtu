@@ -1,0 +1,27 @@
+<?xml version="1.0"?>
+<VTKFile type="UnstructuredGrid" version="0.1" byte_order="LittleEndian" compressor="vtkZLibDataCompressor">
+  <UnstructuredGrid>
+    <Piece NumberOfPoints="4"                    NumberOfCells="3"                   >
+      <PointData>
+        <DataArray type="Float64" Name="Applied Load [N]" NumberOfComponents="2" format="appended" RangeMin="0"                    RangeMax="0"                    offset="0"                   />
+        <DataArray type="Float64" Name="Displacements [m]" NumberOfComponents="2" format="appended" RangeMin="0"                    RangeMax="0.025"                offset="40"                  />
+        <DataArray type="Float64" Name="Reactions [N]" NumberOfComponents="2" format="appended" RangeMin="0"                    RangeMax="58333.333333"         offset="108"                 />
+      </PointData>
+      <CellData>
+        <DataArray type="Float64" Name="E [Pa]" format="appended" RangeMin="1"                    RangeMax="1"                    offset="188"                 />
+        <DataArray type="Float64" Name="A [m^2]" format="appended" RangeMin="8000000"              RangeMax="8000000"              offset="236"                 />
+      </CellData>
+      <Points>
+        <DataArray type="Float32" Name="Points" NumberOfComponents="3" format="appended" RangeMin="0"                    RangeMax="5"                    offset="284"                 />
+      </Points>
+      <Cells>
+        <DataArray type="Int64" Name="connectivity" format="appended" RangeMin=""                     RangeMax=""                     offset="340"                 />
+        <DataArray type="Int64" Name="offsets" format="appended" RangeMin=""                     RangeMax=""                     offset="392"                 />
+        <DataArray type="UInt8" Name="types" format="appended" RangeMin=""                     RangeMax=""                     offset="440"                 />
+      </Cells>
+    </Piece>
+  </UnstructuredGrid>
+  <AppendedData encoding="base64">
+   _AQAAAACAAABAAAAADAAAAA==eJxjYKAMAAAAQAABAQAAAACAAABAAAAAHwAAAA==eJxjYICAWTPBYL9YzkEgKrNPTwOBafsZCAAAGCcL5Q==AQAAAACAAABAAAAAKQAAAA==eJxjYICA1auAoPqNAwMasOp7bNG3+ajDGpC82wEHCwj/AEweABTXEmU=AQAAAACAAAAYAAAAEAAAAA==eJxjYACBD/YMaDQAIt0Djg==AQAAAACAAAAYAAAAEgAAAA==eJxjYGBgaGiJc2RAowE0+wTqAQAAAACAAAAwAAAAFgAAAA==eJxjYGhwYIADENsBiY8MIOIATTACgQ==AQAAAACAAAAwAAAAEwAAAA==eJxjYIAARjSaCY3PDKUBANAACQ==AQAAAACAAAAYAAAAEAAAAA==eJxjYoAAFijNBqUBALgADQ==AQAAAACAAAADAAAACwAAAA==eJxjZmYGAAAVAAo=
+  </AppendedData>
+</VTKFile>
