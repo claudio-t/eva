@@ -24,7 +24,7 @@
 # define UNFEASIBLE_SCENARIO_FITNESS std::numeric_limits<double>::infinity()
 # endif
 
-namespace eva { namespace pagmo {
+namespace pagmo{ namespace problem {
 
 /// Base class for a structural optimization problem.
 /// Functions that have to be reimplemented are:
@@ -35,7 +35,7 @@ namespace eva { namespace pagmo {
 /// -] compute_constraints_impl
 /// -] compute_mass
 /// -]
-class structural_problem : public pagmo::problem::base
+class structural_problem : public base
 {
 public:
     using structure_t = eva::frame2d;
@@ -61,24 +61,7 @@ public:
 
     /// Returns extra information
     virtual std::string human_readable_extra() const;
-    
-    
-protected:
-    /// Objective function implementation; must be reimplemented.
-    virtual void objfun_impl(fitness_vector&, const decision_vector&) const = 0;
-
-    
-    /// Defines problem variables bounds; must be reimplemented.
-    virtual void set_bounds() = 0;
-
-    /// Evaluates constraints: the default implementation requires  
-    /// the structure to be a single connected component containing
-    /// all mandatory vertices; moreover the structure mass is
-    /// required to be lesser than max_mass_ (thus a suitable
-    /// implementation of compute_mass function must be provided).    
-    virtual void compute_constraints_impl(fitness_vector&, const decision_vector&) const;
-    
-    /// Computes the structure mass; it is called by
+    s called by
     /// compute_constraints_impl in order to enforce the mass constraint.
     virtual double compute_mass(const structure_t& structure) const = 0;
     

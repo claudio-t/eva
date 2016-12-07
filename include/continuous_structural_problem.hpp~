@@ -1,7 +1,7 @@
-# ifndef __PAGMO_CONTINUOUS_STRUCTURAL_PROBLEM__
-# define __PAGMO_CONTINUOUS_STRUCTURAL_PROBLEM__
+# ifndef __PAGMO_STRUCTURAL_PROBLEM__
+# define __PAGMO_STRUCTURAL_PROBLEM__
 /**
- * @file continuous structural_problem.hpp
+ * @file structural_problem.hpp
  * @brief Contains the structural_problem class declaration used in
  * the topological optimization procedure.
  */
@@ -26,8 +26,11 @@
 
 namespace pagmo{ namespace problem {
 
-
-class __PAGMO_VISIBLE continuous_structural_problem : public base
+/// A random problem
+/**
+ * @author Dario Izzo (dario.izzo@gmail.com)
+ */
+class __PAGMO_VISIBLE structural_problem : public base
 {
 public:
     /* Member types */
@@ -37,13 +40,10 @@ public:
     using gene_mask_t = std::vector< std::vector<size_t> >;
     
     /* Constructor(s) */
-    continuous_structural_problem(
-        unsigned int dim,
-        const std::vector<joint_t>& joints,
-        const gene_mask_t& gene_mask,
-        const double max_volume,
-        const double max_section
-        );
+    structural_problem(unsigned int dim,
+                       const std::vector<joint_t>& joints,
+                       const gene_mask_t& gene_mask,
+                       const int n_max);
     
     /* Pagmo stuff */    
     base_ptr clone() const;
@@ -68,7 +68,7 @@ private:
         ar & boost::serialization::base_object<base>(*this);
         ar & joints_;
         ar & gene_mask_;
-        ar & max_volume_;
+        ar & n_max_;
         ar & mandatory_vertices_;
     }
     
@@ -79,8 +79,8 @@ private:
     /// Genes mask
     const gene_mask_t& gene_mask_;
 
-    /// Maximum volume
-    const double max_volume_;         
+    /// Maximum number of links
+    const int n_max_;         
 
     /// Indices of mandatory vertices (the ones with either an applied
     /// load or a specified BC)
@@ -90,5 +90,5 @@ private:
 
 }} // namespaces
 
-BOOST_CLASS_EXPORT_KEY(pagmo::problem::continuous_structural_problem)
-# endif // __PAGMO_CONTINUOUS_STRUCTURAL_PROBLEM__
+BOOST_CLASS_EXPORT_KEY(pagmo::problem::structural_problem)
+# endif // __PAGMO_STRUCTURAL_PROBLEM__

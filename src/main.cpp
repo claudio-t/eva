@@ -37,23 +37,23 @@ int main(int argc, char * argv [])
     // std::cout << compliance << std::endl;
     
     // Display undeformed structure
-    display(structure);
+    eva::display(structure);
     
     // Save to vtu for paraview
     write_vtu(structure, results, "test.vtu");
 
-    write_graphviz(std::cout, structure, make_joint_properties_writer(structure));
+    eva::write_graphviz(std::cout, structure, eva::make_joint_properties_writer(structure));
 
     // Check Path [1]--[6] using BFS (truss3d.dot --> EXPECT TRUE)
-    auto path_1_6 = eva::utils::check_path(0, 5, structure);
+    // auto path_1_6 = eva::utils::check_path(0, 5, structure);
 
     
     // Check Path [1]--[7] using BFS (truss3d.dot --> EXPECT FALSE)
-    auto path_1_7 = eva::utils::check_path(1, 6, structure);
+    // auto path_1_7 = eva::utils::check_path(1, 6, structure);
 
-    std::cout << std::boolalpha;
-    std::cout << "Path 1--6 ? " << path_1_6 << "\n";
-    std::cout << "Path 1--7 ? " << path_1_7 << "\n";
+    // std::cout << std::boolalpha;
+    // std::cout << "Path 1--6 ? " << path_1_6 << "\n";
+    // std::cout << "Path 1--7 ? " << path_1_7 << "\n";
     // Check Path [1]--[6] using DFS
     
     // Print properties (test)

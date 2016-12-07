@@ -6,11 +6,11 @@
  * @brief Contains methods and classes to solve truss structures.
  */
 // eva
-# include "structure.hpp"
+# include "core_sa.hpp"
 
 
 
-namespace eva {
+namespace eva { namespace sa {
     
 //####################################### DECLARATIONS #############################################
 
@@ -25,38 +25,65 @@ template <int N> struct truss_joint;
 template <int N> struct truss_element;
 
 
-//-------------------------------------- Truss tag types -----------------------------------------//
+//--------------------------------------- Truss  types -------------------------------------------//
 /// 2-dimensional truss structure type
-using truss2d = generic_structure<truss_joint<2>, truss_element<2>, truss_kind<2>>;
+using truss2d = generic_structure< truss_joint<2>, truss_element<2>, truss_kind<2> >;
     
 /// 3-dimensional truss structure type
-using truss3d = generic_structure<truss_joint<3>, truss_element<3>, truss_kind<3>>;
-
-
-//------------------------------------- Results Assembling ---------------------------------------//
-template <int N>
-struct result<truss_kind<N>>;
+using truss3d = generic_structure< truss_joint<3>, truss_element<3>, truss_kind<3> >;
 
 
 //-------------------------------------- Post-processing -----------------------------------------//
 template <int N> 
-struct internal_forces_getter<truss_kind<N>>;
+struct internal_forces_getter< truss_kind<N> >;
 
 
 //------------------------------------- Problem Assembling ---------------------------------------//
 /// Specializes element_matrix_assembler functor for a 2D trusses
 template <>
-struct element_matrix_assembler<truss_kind<2>>;
+struct element_matrix_assembler< truss_kind<2> >;
 
 /// Specializes element_matrix_assembler functor for a 3D trusses
 template <>
-struct element_matrix_assembler<truss_kind<3>>; 
+struct element_matrix_assembler< truss_kind<3> >; 
 
 /// Specializes known_terms_assembler functor for both 2D and 3D trusses
 template <int N>
-struct known_terms_assembler<truss_kind<N>>;
+struct known_terms_assembler< truss_kind<N> >;
+
+}}// end namespaces eva and sa
+
+namespace eva {
+//------------------------------------- Results Assembling ---------------------------------------//
+template <int N>
+struct result< sa::truss_kind<N> >;
+
+//------------------------------------- Results Assembling ---------------------------------------//
+template <int N>
+struct result< sa::truss_kind<N> >
+{   
+    constexpr static int ndof = sa::truss_kind<N>::ndof;
+    constexpr static int sdim = sa::truss_kind<N>::sdim;
+    
+    fixed_vector<sdim> displacement;
+    fixed_vector<sdim> reaction;
+
+    result(const fixed_vector<ndof>& u,
+           const fixed_vector<ndof>& f,
+           const sa::truss_joint<N>& p)
+        : displacement(u)
+        , reaction    (f)
+    {
+        // Keep result only if there is no load applied
+        if (p.load != fixed_vector<sdim>::Zero())
+            reaction = fixed_vector<sdim>::Zero();
+    }
+};
+
+} // end namespace eva
 
 
+namespace eva { namespace sa {
 
 //####################################### DEFINITIONS ##############################################
   
@@ -91,31 +118,9 @@ template <int N> struct truss_element
     real A; ///< Cross sectional area [m^2]
 };
 
-//------------------------------------- Results Assembling ---------------------------------------//
-template <int N>
-struct result<truss_kind<N>>
-{
-    constexpr static int ndof = truss_kind<N>::ndof;
-    constexpr static int sdim = truss_kind<N>::sdim;
-    
-    fixed_vector<sdim> displacement;
-    fixed_vector<sdim> reaction;
-
-    result(const fixed_vector<ndof>& u,
-           const fixed_vector<ndof>& f,
-           const truss_joint<N>& p)
-        : displacement(u)
-        , reaction    (f)
-    {
-        // Keep result only if there is no load applied
-        if (p.load != fixed_vector<sdim>::Zero())
-            reaction = fixed_vector<sdim>::Zero();
-    }
-};
-
 //-------------------------------------- Post-processing -----------------------------------------//
 template <int N> 
-struct internal_forces_getter<truss_kind<N>> 
+struct internal_forces_getter< truss_kind<N> > 
 {
     template <typename S>
     std::array<fixed_vector<kind_of<S>::type::ndof>,2>
@@ -174,7 +179,7 @@ struct internal_forces_getter<truss_kind<N>>
 
 //------------------------------------- Problem Assembling ---------------------------------------//
 template <>
-struct element_matrix_assembler<truss_kind<2>> 
+struct element_matrix_assembler< truss_kind<2> > 
 {
     template <typename S>
     fixed_matrix<4,4>
@@ -212,7 +217,7 @@ struct element_matrix_assembler<truss_kind<2>>
 };
 
 template <> 
-struct element_matrix_assembler<truss_kind<3>> 
+struct element_matrix_assembler< truss_kind<3> > 
 {
     template <typename S>
     fixed_matrix<6,6>
@@ -251,7 +256,7 @@ struct element_matrix_assembler<truss_kind<3>>
 
 
 template <int N>
-struct known_terms_assembler<truss_kind<N>> 
+struct known_terms_assembler< truss_kind<N> > 
 {
     template <typename S>
     std::array<dense_vector, 2>
@@ -272,7 +277,7 @@ struct known_terms_assembler<truss_kind<N>>
         size_t pos_f = 0u;     // f_f incremental iterator
         size_t pos_u = n_b;    // u_b decremental iterator
         
-        for (auto v : make_iterator_range(vertices(s)))
+        for (auto v : boost::make_iterator_range(vertices(s)))
         {
             // Get bcs & loads
             const auto& bcs  = s[v].bcs;
@@ -294,6 +299,6 @@ struct known_terms_assembler<truss_kind<N>>
 };
 
     
-} //end namespace eva
+}} //end namespace eva
 
 # endif //__EVA_TRUSS__

@@ -117,8 +117,6 @@ continuous_structural_problem::compute_constraints_impl(constraint_vector& const
     
     // NB: for inequalty constraints negative means OK, positive KO
     constraints[2] = volume - max_volume_;
-    // std::cout << "Volume constraint: " << max_volume_ - volume << "\n";
-    
 }
 
 continuous_structural_problem::structure_t

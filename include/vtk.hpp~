@@ -1,0 +1,11 @@
+# ifndef __EVA_VTK__
+# define __EVA_VTK__
+
+
+namespace eva {
+
+
+}
+
+
+# endif //__EVA_VTK__

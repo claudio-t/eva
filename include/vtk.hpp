@@ -97,27 +97,27 @@ struct vtk_element_properties_adder;
 
 /// Specialization for a truss_element
 template <int N>
-struct vtk_joint_properties_adder< truss_joint<N> >;
+struct vtk_joint_properties_adder< sa::truss_joint<N> >;
 
 /// Specialization for a truss result type
 template <int N>
-struct vtk_joint_properties_adder< result< truss_kind<N> > >;
+struct vtk_joint_properties_adder< result< sa::truss_kind<N> > >;
 
 /// Specialization for a truss_element
 template <int N>
-struct vtk_element_properties_adder< truss_element<N> >;
+struct vtk_element_properties_adder< sa::truss_element<N> >;
 
 /// Specialization for a 2D frame result type
 template <>
-struct vtk_joint_properties_adder< result< frame_kind<2> > >;
+struct vtk_joint_properties_adder< result< sa::frame_kind<2> > >;
 
 /// Specialization for a 2D frame element
 template <>
-struct vtk_joint_properties_adder< frame_joint<2> >;
+struct vtk_joint_properties_adder< sa::frame_joint<2> >;
 
 /// Specialization for a 2D frame element
 template <>
-struct vtk_element_properties_adder< frame_element<2> >;
+struct vtk_element_properties_adder< sa::frame_element<2> >;
 
 
 //####################################### DEFINITIONS ##############################################
@@ -149,7 +149,7 @@ vtk_sptr<vtkUnstructuredGrid> to_vtk_unstructured_grid(const S& structure)
     
     // Build VTK points
     vtk_sptr<points_t> points = vtk_sptr<points_t>::New();
-    for (const auto& v : make_iterator_range(vertices(structure)))
+    for (const auto& v : boost::make_iterator_range(vertices(structure)))
     {
         // Build point from joint coordinates
         const auto coords = structure[v].coords.data();
@@ -249,7 +249,7 @@ void vtk_add_element_properties(
 
 
 template <int N>
-struct vtk_joint_properties_adder< truss_joint<N> > 
+struct vtk_joint_properties_adder< sa::truss_joint<N> > 
 {    
     template <typename S> 
     void operator()(const S& s, vtk_sptr<vtkUnstructuredGrid> ugrid)
@@ -260,7 +260,7 @@ struct vtk_joint_properties_adder< truss_joint<N> >
         d_load->SetName("Applied Load [N]");
         d_load->SetNumberOfComponents(kind_of<S>::type::sdim);
         
-        for (const auto& v : make_iterator_range(vertices(s)))
+        for (const auto& v : boost::make_iterator_range(vertices(s)))
         {
             const auto& vp = s[v];
             d_load->InsertNextTupleValue(vp.load.data());
@@ -272,7 +272,7 @@ struct vtk_joint_properties_adder< truss_joint<N> >
 
 
 template <>
-struct vtk_joint_properties_adder< frame_joint<2> > 
+struct vtk_joint_properties_adder< sa::frame_joint<2> > 
 {    
     template <typename S> 
     void operator()(const S& s, vtk_sptr<vtkUnstructuredGrid> ugrid)
@@ -283,20 +283,20 @@ struct vtk_joint_properties_adder< frame_joint<2> >
         d_torque->SetName("Applied Torque [Nm]");
         d_torque->SetNumberOfComponents(kind_of<S>::type::rdim);
         
-        for (const auto& v : make_iterator_range(vertices(s)))
+        for (const auto& v : boost::make_iterator_range(vertices(s)))
         {
             const auto& vp = s[v];
             d_torque->InsertNextTupleValue(vp.torque.data());
         }
         // Add properties to the grid
-        vtk_joint_properties_adder<truss_joint<2>>()(s, ugrid);
+        vtk_joint_properties_adder<sa::truss_joint<2>>()(s, ugrid);
         ugrid->GetPointData()->AddArray(d_torque);
     }
 };
 
 
 template <int N>
-struct vtk_element_properties_adder<truss_element<N>> 
+struct vtk_element_properties_adder< sa::truss_element<N> > 
 {    
     template <typename S> 
     void operator()(const S& s, vtk_sptr<vtkUnstructuredGrid> ugrid)
@@ -323,7 +323,7 @@ struct vtk_element_properties_adder<truss_element<N>>
 
 
 template <>
-struct vtk_element_properties_adder< frame_element<2> > 
+struct vtk_element_properties_adder< sa::frame_element<2> > 
 {    
     template <typename S> 
     void operator()(const S& s, vtk_sptr<vtkUnstructuredGrid> ugrid)
@@ -338,7 +338,7 @@ struct vtk_element_properties_adder< frame_element<2> >
             d_I->InsertNextValue(s[e].I);
         
         // Add properties to grid
-        vtk_element_properties_adder< truss_element<2> >()(s, ugrid);
+        vtk_element_properties_adder< sa::truss_element<2> >()(s, ugrid);
         ugrid->GetCellData()->AddArray(d_I);
     }
 };
@@ -363,7 +363,7 @@ void add_joint_results(
 
 
 template <int N>
-struct vtk_joint_properties_adder< result< truss_kind<N> > > 
+struct vtk_joint_properties_adder< result< sa::truss_kind<N> > > 
 {    
     template <typename S> 
     void operator()(const S& structure,
@@ -381,7 +381,7 @@ struct vtk_joint_properties_adder< result< truss_kind<N> > >
         d_displ->SetNumberOfComponents(kind_of<S>::type::sdim);
         d_react->SetNumberOfComponents(kind_of<S>::type::sdim);
         
-        for (const auto& v : make_iterator_range(vertices(structure)))
+        for (const auto& v : boost::make_iterator_range(vertices(structure)))
         {
             const auto& vr = results[v];
             d_displ->InsertNextTupleValue(vr.displacement.data());
@@ -395,7 +395,7 @@ struct vtk_joint_properties_adder< result< truss_kind<N> > >
 
 
 template <>
-struct vtk_joint_properties_adder< result< frame_kind<2> > > 
+struct vtk_joint_properties_adder< result< sa::frame_kind<2> > > 
 {    
     template <typename S> 
     void operator()(const S& structure,
@@ -413,14 +413,14 @@ struct vtk_joint_properties_adder< result< frame_kind<2> > >
         d_rotation->SetNumberOfComponents(kind_of<S>::type::rdim);
         d_torque  ->SetNumberOfComponents(kind_of<S>::type::rdim);
         
-        for (const auto& v : make_iterator_range(vertices(structure)))
+        for (const auto& v : boost::make_iterator_range(vertices(structure)))
         {
             const auto& vr = results[v];
             d_rotation->InsertNextTupleValue(vr.rotation.data());
             d_torque  ->InsertNextTupleValue(vr.react_torque.data());
         }
         // Add results to the grid
-        vtk_joint_properties_adder< result< truss_kind<2> > >()(structure, results, ugrid);
+        vtk_joint_properties_adder< result< sa::truss_kind<2> > >()(structure, results, ugrid);
         ugrid->GetPointData()->AddArray(d_torque);
     }
 };
