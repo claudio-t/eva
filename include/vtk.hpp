@@ -7,8 +7,9 @@
  */
 
 // eva
-# include "truss.hpp"
-# include "frame.hpp"
+// # include "truss.hpp"
+// # include "frame.hpp"
+# include "core.hpp"
 // vtk
 # include <vtkVersion.h>
 # include <vtkSmartPointer.h>
@@ -44,7 +45,6 @@ vtk_sptr<vtkRenderWindowInteractor>
 display(const vtk_sptr<vtkUnstructuredGrid> ugrid);
 
 
-
 template<typename S>
 void
 write_vtu(const S& structure,
@@ -54,8 +54,6 @@ write_vtu(const S& structure,
 void
 write_vtu(const vtk_sptr<vtkUnstructuredGrid> ugrid,
           const std::string& filename);
-
-
 
 
 /// Adds the joint (node) properties of the structure to the vtk
@@ -69,6 +67,17 @@ void vtk_add_joint_properties(const S& structure,
 template <typename S>
 void vtk_add_element_properties(const S& structure,
                                 vtk_sptr<vtkUnstructuredGrid> ugrid);
+
+
+/// Adds the results of the solved structure to the vtk
+/// unstructured grid object 
+template <typename S> 
+void add_results(
+    const S& structure,
+    const std::vector< typename result_of<S>::type >& results,
+    vtk_sptr<vtkUnstructuredGrid> ugrid);
+
+
 
 /// Adds the joint (node) properties and results of the structure to the vtk
 /// unstructured grid object
@@ -95,30 +104,39 @@ struct vtk_joint_properties_adder;
 template <typename ElementProps>
 struct vtk_element_properties_adder;
 
+#ifdef __EVA_TRUSS__
+
 /// Specialization for a truss_element
 template <int N>
-struct vtk_joint_properties_adder< sa::truss_joint<N> >;
+struct vtk_joint_properties_adder< truss_joint<N> >;
+
+/// Specialization for a truss_element
+template <int N>
+struct vtk_element_properties_adder< truss_element<N> >;
+
 
 /// Specialization for a truss result type
 template <int N>
-struct vtk_joint_properties_adder< result< sa::truss_kind<N> > >;
+struct vtk_joint_properties_adder< result< truss_kind<N> > >;
 
-/// Specialization for a truss_element
-template <int N>
-struct vtk_element_properties_adder< sa::truss_element<N> >;
+#endif//__EVA_TRUSS__
+
+
+#ifdef __EVA_FRAME__
 
 /// Specialization for a 2D frame result type
 template <>
-struct vtk_joint_properties_adder< result< sa::frame_kind<2> > >;
+struct vtk_joint_properties_adder< result< frame_kind<2> > >;
 
 /// Specialization for a 2D frame element
 template <>
-struct vtk_joint_properties_adder< sa::frame_joint<2> >;
+struct vtk_joint_properties_adder< frame_joint<2> >;
 
 /// Specialization for a 2D frame element
 template <>
-struct vtk_element_properties_adder< sa::frame_element<2> >;
+struct vtk_element_properties_adder< frame_element<2> >;
 
+#endif//__EVA_FRAME__
 
 //####################################### DEFINITIONS ##############################################
 
@@ -247,9 +265,26 @@ void vtk_add_element_properties(
     // vtk_element_properties_adder<typename result_of<S>::type>()(structure, results, ugrid);
 }
 
+template <typename S> 
+void add_joint(
+    const S& structure,
+    const std::vector< typename result_of<S>::type >& results,
+    vtk_sptr<vtkUnstructuredGrid> ugrid)
+{
+    // Add data
+    using vertex_t = typename joint_of<S>::type;
+    vtk_joint_properties_adder<vertex_t>()(structure, ugrid);
+
+    //Add results
+    using result_t = result<typename kind_of<S>::type>;
+    vtk_joint_properties_adder<result_t>()(structure, results, ugrid);
+    
+}
+
+#ifdef __EVA_TRUSS__
 
 template <int N>
-struct vtk_joint_properties_adder< sa::truss_joint<N> > 
+struct vtk_joint_properties_adder< truss_joint<N> > 
 {    
     template <typename S> 
     void operator()(const S& s, vtk_sptr<vtkUnstructuredGrid> ugrid)
@@ -270,33 +305,8 @@ struct vtk_joint_properties_adder< sa::truss_joint<N> >
     }
 };
 
-
-template <>
-struct vtk_joint_properties_adder< sa::frame_joint<2> > 
-{    
-    template <typename S> 
-    void operator()(const S& s, vtk_sptr<vtkUnstructuredGrid> ugrid)
-    {   
-        // Init properties containers
-        vtk_sptr<vtkDoubleArray> d_torque(vtk_sptr<vtkDoubleArray>::New()); // Applied
-                                                                            // torque
-        d_torque->SetName("Applied Torque [Nm]");
-        d_torque->SetNumberOfComponents(kind_of<S>::type::rdim);
-        
-        for (const auto& v : boost::make_iterator_range(vertices(s)))
-        {
-            const auto& vp = s[v];
-            d_torque->InsertNextTupleValue(vp.torque.data());
-        }
-        // Add properties to the grid
-        vtk_joint_properties_adder<sa::truss_joint<2>>()(s, ugrid);
-        ugrid->GetPointData()->AddArray(d_torque);
-    }
-};
-
-
 template <int N>
-struct vtk_element_properties_adder< sa::truss_element<N> > 
+struct vtk_element_properties_adder< truss_element<N> > 
 {    
     template <typename S> 
     void operator()(const S& s, vtk_sptr<vtkUnstructuredGrid> ugrid)
@@ -322,48 +332,8 @@ struct vtk_element_properties_adder< sa::truss_element<N> >
 };
 
 
-template <>
-struct vtk_element_properties_adder< sa::frame_element<2> > 
-{    
-    template <typename S> 
-    void operator()(const S& s, vtk_sptr<vtkUnstructuredGrid> ugrid)
-    {   
-        // Init properties containers
-        vtk_sptr<vtkDoubleArray>
-            d_I(vtk_sptr<vtkDoubleArray>::New()); // Second moment of
-                                                  // area
-        d_I->SetName("I [m^4]");
-    
-        for (const auto& e : make_iterator_range(edges(s)))
-            d_I->InsertNextValue(s[e].I);
-        
-        // Add properties to grid
-        vtk_element_properties_adder< sa::truss_element<2> >()(s, ugrid);
-        ugrid->GetCellData()->AddArray(d_I);
-    }
-};
-
-
-
-template <typename S> 
-void add_joint_results(
-    const S& structure,
-    const std::vector< typename result_of<S>::type >& results,
-    vtk_sptr<vtkUnstructuredGrid> ugrid)
-{
-    // Add data
-    using vertex_t = typename joint_of<S>::type;
-    vtk_joint_properties_adder<vertex_t>()(structure, ugrid);
-
-    //Add results
-    using result_t = result<typename kind_of<S>::type>;
-    vtk_joint_properties_adder<result_t>()(structure, results, ugrid);
-    
-}
-
-
 template <int N>
-struct vtk_joint_properties_adder< result< sa::truss_kind<N> > > 
+struct vtk_joint_properties_adder< result< truss_kind<N> > > 
 {    
     template <typename S> 
     void operator()(const S& structure,
@@ -393,9 +363,57 @@ struct vtk_joint_properties_adder< result< sa::truss_kind<N> > >
     }
 };
 
+#endif//__EVA_TRUSS__
+
+
+#ifdef __EVA_FRAME__
 
 template <>
-struct vtk_joint_properties_adder< result< sa::frame_kind<2> > > 
+struct vtk_joint_properties_adder< frame_joint<2> > 
+{    
+    template <typename S> 
+    void operator()(const S& s, vtk_sptr<vtkUnstructuredGrid> ugrid)
+    {   
+        // Init properties containers
+        vtk_sptr<vtkDoubleArray> d_torque(vtk_sptr<vtkDoubleArray>::New()); // Applied
+                                                                            // torque
+        d_torque->SetName("Applied Torque [Nm]");
+        d_torque->SetNumberOfComponents(kind_of<S>::type::rdim);
+        
+        for (const auto& v : boost::make_iterator_range(vertices(s)))
+        {
+            const auto& vp = s[v];
+            d_torque->InsertNextTupleValue(vp.torque.data());
+        }
+        // Add properties to the grid
+        vtk_joint_properties_adder<truss_joint<2>>()(s, ugrid);
+        ugrid->GetPointData()->AddArray(d_torque);
+    }
+};
+
+template <>
+struct vtk_element_properties_adder< frame_element<2> > 
+{    
+    template <typename S> 
+    void operator()(const S& s, vtk_sptr<vtkUnstructuredGrid> ugrid)
+    {   
+        // Init properties containers
+        vtk_sptr<vtkDoubleArray>
+            d_I(vtk_sptr<vtkDoubleArray>::New()); // Second moment of
+                                                  // area
+        d_I->SetName("I [m^4]");
+    
+        for (const auto& e : make_iterator_range(edges(s)))
+            d_I->InsertNextValue(s[e].I);
+        
+        // Add properties to grid
+        vtk_element_properties_adder< truss_element<2> >()(s, ugrid);
+        ugrid->GetCellData()->AddArray(d_I);
+    }
+};
+
+template <>
+struct vtk_joint_properties_adder< result< frame_kind<2> > > 
 {    
     template <typename S> 
     void operator()(const S& structure,
@@ -420,11 +438,12 @@ struct vtk_joint_properties_adder< result< sa::frame_kind<2> > >
             d_torque  ->InsertNextTupleValue(vr.react_torque.data());
         }
         // Add results to the grid
-        vtk_joint_properties_adder< result< sa::truss_kind<2> > >()(structure, results, ugrid);
+        vtk_joint_properties_adder< result< truss_kind<2> > >()(structure, results, ugrid);
         ugrid->GetPointData()->AddArray(d_torque);
     }
 };
 
+#endif//__EVA_FRAME__
 
 } // end namespace eva
 

@@ -2,86 +2,12 @@
 /// @brief Contains definitions of template functions and class methods
 ///        declared in file core_sa.hpp .
 
-//-------------------------------------- Problem Solving -----------------------------------------//
-template <typename Params, typename Kind, typename S>
-auto
-solve(const S& s, Params p) 
-{
-    // If Kind is void use Structure kind, else directly use Kind
-    using kind_t = typename std::conditional< 
-        std::is_void<Kind>::value, 
-        typename kind_of<S>::type, Kind
-        >::type;
 
-    auto r = solver<kind_t, Params>()(s);
-    const auto& uu = std::get<0>(r);
-    const auto& ff = std::get<1>(r);
-    
-    return assemble_results<kind_t>(uu, ff, s);
-    // return solver<kind_t, Params>()(s);
-}
-
-template <typename StructureKind, typename Params>
-struct solver 
-{    
-    using algebra_t = typename Params::algebra_t;
-    using solver_t  = typename Params::solver_t;
-    
-    template <class S>
-    auto
-    operator()(const S& s) 
-    {
-        // Assemble system: K*u = f
-        // 
-        // | K_ff  K_fb |*| u_f |  =  | f_f | 
-        // | K_bf  K_bb | | u_b |     | f_b |
-        //
-        // K := Stiffness matrix
-        // u := displacement vector
-        // f := load/reaction vector
-        //
-        // $_f := Free DOF
-        // $_b := BC   DOF
-        
-        // Build (global) DOF map with BCs related nodes located at the back
-        auto dofmap = std::vector<index_t>();
-        size_t n_f, n_b;
-        std::tie(dofmap, n_f, n_b) = build_global_dofmap(s);
-        
-        // Assemble system stiffness matrices (in global coordinates)
-        // NOTE: use .sparseView()?
-        auto matrices = assemble_stiffness_submatrices<algebra_t>(s, dofmap, n_f, n_b);
-        const auto& K_ff = std::get<0>(matrices);
-        const auto& K_fb = std::get<1>(matrices);
-        const auto& K_bb = std::get<2>(matrices);
-        
-        // Assemble known terms (in global coordinates)
-        auto known_terms = assemble_known_terms(s, n_f, n_b);
-        const dense_vector& f_f = std::get<0>(known_terms); // displacements on BC nodes
-        const dense_vector& u_b = std::get<1>(known_terms); // applied loads
-
-        // Solve condensed system:
-        // K_ff * u_f = f_f - K_fb * u_b
-        solver_t eigen_solver(K_ff);
-        dense_vector rhs = f_f - K_fb * u_b;
-        dense_vector u_f = eigen_solver.solve(rhs);
-        
-        // Compute reactions on BC DOF:
-        // f_b = K_bf * u_f + K_bb * u_b
-        dense_vector f_b = K_fb.transpose() * u_f + K_bb * u_b;
-        
-        // Asemble displacement and force vectors 
-        // using the original DOF ordering
-        dense_vector uu = merge_and_reorder(u_f, u_b, dofmap);
-        dense_vector ff = merge_and_reorder(f_f, f_b, dofmap);
-
-        return std::make_pair(std::move(uu), std::move(ff));
-        // return assemble_results<StructureKind>(uu, ff, s);
-    }
-};
-
+namespace eva { namespace sa {
 
 //------------------------------------- Problem Assembling ---------------------------------------//
+
+
 template <typename S> 
 auto
 assemble_element_matrix(const typename S::edge_descriptor& e, const S& s) 
@@ -101,60 +27,18 @@ struct element_matrix_assembler
 };
 
 
-template <typename S>
-std::array<dense_vector, 2>
-assemble_known_terms(const S& s, const size_t n_f, const size_t n_b) 
-{
-    return known_terms_assembler<typename kind_of<S>::type>()(s, n_f, n_b);
-}
 
-template <typename StructureKind>
-struct known_terms_assembler 
-{
-    template <typename S>
-    void
-    operator()(const S& s, const size_t n_f, const size_t n_b) 
-    {
-        static_assert(!std::is_same<S,S>::value, 
-                      "Assemble method not implemented");
-    }
-};
-
-
-template <typename A, typename S>
-auto
-assemble_stiffness_submatrices(const S& s, const std::vector<index_t>& dofmap,
-                          const size_t n_f, const size_t n_b) 
-{
-    return stiffness_submatrices_assembler<A>()(s, dofmap, n_f, n_b);
-}
-
-template <typename AlgebraKind>
-struct stiffness_submatrices_assembler
-{
-    template <typename S>
-    void
-    operator()(const S& s,
-               const std::vector<index_t>& dofmap,
-               const size_t n_f, const size_t n_b)
-    {
-        static_assert(
-            std::is_same<S,S>::value, 
-            "Algebra type must be either dense_algebra_t or sparse_algebra_t"
-            );
-    }
-};
 
 template <>
 struct stiffness_submatrices_assembler<dense_algebra_t>
 {
-    template <typename S>
+    template <typename Structure>
     std::array<dense_matrix, 3>
-    operator()(const S& s,
+    operator()(const Structure& s,
                const std::vector<index_t>& dofmap,
                const size_t n_f, const size_t n_b)
     {
-        constexpr size_t dim = kind_of<S>::type::ndof;
+        constexpr size_t dim = kind_of<Structure>::type::ndof;
         
         // Init SYSTEM SUB-matrices
         dense_matrix K_ff = dense_matrix::Zero(n_f, n_f);
@@ -203,21 +87,23 @@ struct stiffness_submatrices_assembler<dense_algebra_t>
 template <>
 struct stiffness_submatrices_assembler<sparse_algebra_t>
 {
-    template <typename S>
+    template <typename Structure>
     std::array<sparse_matrix, 3>
-    operator()(const S& s, const std::vector<index_t>& dofmap,
-                             const size_t n_f, const size_t n_b)
+    operator()(const Structure& s,
+               const std::vector<index_t>& dofmap,
+               const size_t n_f, const size_t n_b)
     {
         return triplets_impl(s, dofmap, n_f, n_b);
         // return matrices_impl(s, dofmap, n_f, n_b);
     }
     
-    template <typename S>
+    template <typename Structure>
     std::array<sparse_matrix, 3>
-    triplets_impl(const S& s, const std::vector<index_t>& dofmap,
-                 const size_t n_f, const size_t n_b)
+    triplets_impl(const Structure& s,
+                  const std::vector<index_t>& dofmap,
+                  const size_t n_f, const size_t n_b)
     {
-        constexpr size_t dim = kind_of<S>::type::ndof; 
+        constexpr size_t dim = kind_of<Structure>::type::ndof; 
         
         // Compute number of non-zero entries for each matrix
         auto nnzs = count_nnz_entries(s, dofmap, n_f, n_b);
@@ -287,12 +173,13 @@ struct stiffness_submatrices_assembler<sparse_algebra_t>
         return matrices;
     }
     
-    template <typename S>
+    template <typename Structure>
     std::array<sparse_matrix, 3>
-    matrices_impl(const S& s, const std::vector<index_t>& dofmap,
+    matrices_impl(const Structure& s,
+                  const std::vector<index_t>& dofmap,
                   const size_t n_f, const size_t n_b)
     {    
-        constexpr size_t dim = kind_of<S>::type::ndof; 
+        constexpr size_t dim = kind_of<Structure>::type::ndof; 
             
         // Compute number of non-zero entries for each matrix
         auto nnzs = count_nnz_entries(s, dofmap, n_f, n_b);
@@ -432,58 +319,28 @@ count_nnz_entries(const S& s, const std::vector<index_t>& dofmap,
 # pragma clang diagnostic pop
 }
 
-
-//------------------------------------- Results Assembling ---------------------------------------//
-template <typename StructureKind, typename Structure>
-std::vector< result<StructureKind> >
-assemble_results(
-    const dense_vector& u,
-    const dense_vector& f,
-    const Structure& s)
-{
-    // Aux vars
-    constexpr static int n_loc_dof = StructureKind::ndof;
-    const auto n_nodes = num_vertices(s);
-    
-    // Pre-allocate results
-    using result_t = result<StructureKind>;
-    auto results = std::vector<result_t> ();
-    results.reserve(n_nodes);
-
-    // For each joint (node)
-    // for(size_t node_it = 0u; node_it < n_nodes*n_loc_dof; node_it += n_loc_dof)
-    for (size_t node_it = 0u; node_it < n_nodes; ++node_it)
-    {
-        // Get current node starting index in u and f
-        size_t node_start_idx = node_it * n_loc_dof;
-        
-        // Assemble the corresponding results
-        results.emplace_back(result_t(u.segment<n_loc_dof>(node_start_idx),
-                                      f.segment<n_loc_dof>(node_start_idx),
-                                      s[node_it]));
-    }    
-    return results;
-}
+}} //end namespace eva and sa
 
 
-//-------------------------------------- Post-processing -----------------------------------------//
-template <typename StructureKind> 
-struct internal_forces_getter 
-{
-    template <typename S>
-    void 
-    operator()(const typename S::edge_descriptor& e, const S& s,
-               const std::vector<real>& u, const std::vector<real>& f) 
-    { 
-        static_assert(!std::is_same<S,S>::value, 
-                      "Method not implemented");
-    }
-};
 
-template <typename S> 
-auto
-get_internal_forces(const typename S::edge_descriptor& e, const S& s, 
-                    const std::vector<real>& u, const std::vector<real>& f) 
-{
-    return internal_forces_getter<typename kind_of<S>::type>()(e, s, u, f);
-}
+// //-------------------------------------- Post-processing -----------------------------------------//
+// template <typename StructureKind> 
+// struct internal_forces_getter 
+// {
+//     template <typename S>
+//     void 
+//     operator()(const typename S::edge_descriptor& e, const S& s,
+//                const std::vector<real>& u, const std::vector<real>& f) 
+//     { 
+//         static_assert(!std::is_same<S,S>::value, 
+//                       "Method not implemented");
+//     }
+// };
+
+// template <typename S> 
+// auto
+// get_internal_forces(const typename S::edge_descriptor& e, const S& s, 
+//                     const std::vector<real>& u, const std::vector<real>& f) 
+// {
+//     return internal_forces_getter<typename kind_of<S>::type>()(e, s, u, f);
+// }

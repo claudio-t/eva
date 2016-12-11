@@ -9,8 +9,7 @@
 # include "core_sa.hpp"
 
 
-
-namespace eva { namespace sa {
+namespace eva {
     
 //####################################### DECLARATIONS #############################################
 
@@ -34,43 +33,54 @@ using truss3d = generic_structure< truss_joint<3>, truss_element<3>, truss_kind<
 
 
 //-------------------------------------- Post-processing -----------------------------------------//
-template <int N> 
-struct internal_forces_getter< truss_kind<N> >;
+// template <int N> 
+// struct internal_forces_getter< truss_kind<N> >;
 
 
 //------------------------------------- Problem Assembling ---------------------------------------//
+
+/// Specializes system_submatrices_assembler functor for both 2D and
+/// 3D trusses.
+/// This specialization simply calls the stiffness_submatrices_assembler
+/// functor, which -in turn- automatically selects the proper
+/// specialization of the element_matrix_assembler functor.
+template <typename A, int N>
+struct system_submatrices_assembler<A, truss_kind<N> >;
+
+/// Specializes known_terms_assembler functor for both 2D and 3D trusses
+template <int N>
+struct known_terms_assembler< truss_kind<N> >;
+
+namespace sa
+{
 /// Specializes element_matrix_assembler functor for a 2D trusses
 template <>
 struct element_matrix_assembler< truss_kind<2> >;
 
 /// Specializes element_matrix_assembler functor for a 3D trusses
 template <>
-struct element_matrix_assembler< truss_kind<3> >; 
+struct element_matrix_assembler< truss_kind<3> >;
 
-/// Specializes known_terms_assembler functor for both 2D and 3D trusses
-template <int N>
-struct known_terms_assembler< truss_kind<N> >;
+}//end namespace sa
 
-}}// end namespaces eva and sa
-
-namespace eva {
-//------------------------------------- Results Assembling ---------------------------------------//
-template <int N>
-struct result< sa::truss_kind<N> >;
 
 //------------------------------------- Results Assembling ---------------------------------------//
 template <int N>
-struct result< sa::truss_kind<N> >
+struct result< truss_kind<N> >;
+
+//------------------------------------- Results Assembling ---------------------------------------//
+template <int N>
+struct result< truss_kind<N> >
 {   
-    constexpr static int ndof = sa::truss_kind<N>::ndof;
-    constexpr static int sdim = sa::truss_kind<N>::sdim;
+    constexpr static int ndof = truss_kind<N>::ndof;
+    constexpr static int sdim = truss_kind<N>::sdim;
     
     fixed_vector<sdim> displacement;
     fixed_vector<sdim> reaction;
 
     result(const fixed_vector<ndof>& u,
            const fixed_vector<ndof>& f,
-           const sa::truss_joint<N>& p)
+           const truss_joint<N>& p)
         : displacement(u)
         , reaction    (f)
     {
@@ -79,11 +89,6 @@ struct result< sa::truss_kind<N> >
             reaction = fixed_vector<sdim>::Zero();
     }
 };
-
-} // end namespace eva
-
-
-namespace eva { namespace sa {
 
 //####################################### DEFINITIONS ##############################################
   
@@ -118,66 +123,71 @@ template <int N> struct truss_element
     real A; ///< Cross sectional area [m^2]
 };
 
-//-------------------------------------- Post-processing -----------------------------------------//
-template <int N> 
-struct internal_forces_getter< truss_kind<N> > 
+
+
+//------------------------------------- Problem Assembling ---------------------------------------//
+
+
+template <typename A, int N>
+struct system_submatrices_assembler<A, truss_kind<N> >
 {
     template <typename S>
-    std::array<fixed_vector<kind_of<S>::type::ndof>,2>
-    operator()(const typename S::edge_descriptor& e, const S& s, 
-               const std::vector<real>& u, const std::vector<real>& f) 
+    auto
+    operator()(const S& s,
+               const std::vector<index_t>& dofmap,
+               const size_t n_f, const size_t n_b)
     {
-        const static size_t ndof = kind_of<S>::type::ndof; 
-        
-        // Get local element matrix
-        auto K_el = assemble_element_matrix(e, s);
-        
-        // Get bar endings idxs and applied loads
-        auto a = source(e, s);
-        auto b = target(e, s);
-        
-        const auto& load_a = s[a].load;
-        const auto& load_b = s[b].load;
-        
-        // NOTE: maybe use a fixed size eigen vector
-        dense_vector u_el(2*ndof); // Nodal displacements
-        //~ dense_vector q_el(2*ndof); // Nodal applied loads
-        auto q_el  = fixed_vector<2*ndof>(); 
-             q_el << s[a].load, s[b].load;
+        return sa::stiffness_submatrices_assembler<A>()(s, dofmap, n_f, n_b);
+    }    
+};
     
-        for (size_t i = 0u; i < ndof; ++i)
+
+template <int N>
+struct known_terms_assembler< truss_kind<N> > 
+{
+    template <typename S>
+    std::array<dense_vector, 2>
+    operator()(const S& s, const size_t n_f, const size_t n_b) 
+    {
+        // Aux vars
+        const static int ndof = kind_of<S>::type::ndof;   // #DOF per node (2D => 3, 3D => 6) 
+
+        // Init return var
+# pragma clang diagnostic push
+# pragma clang diagnostic ignored "-Wmissing-braces"
+        auto ret = std::array<dense_vector, 2> {dense_vector(n_f), dense_vector(n_b)};
+# pragma clang diagnostic pop
+        
+        auto& f_f = std::get<0>(ret);   // Force vector (Free DOF only)
+        auto& u_b = std::get<1>(ret);   // Displacement vector (BC DOF only)
+        
+        size_t pos_f = 0u;     // f_f incremental iterator
+        size_t pos_u = n_b;    // u_b decremental iterator
+        
+        for (auto v : boost::make_iterator_range(vertices(s)))
         {
-            // Displacements
-            u_el(i)      = u[ndof*a+i];
-            u_el(i+ndof) = u[ndof*b+i];
-            // Loads
-            q_el(i)      = load_a(i);
-            q_el(i+ndof) = load_b(i);
+            // Get bcs & loads
+            const auto& bcs  = s[v].bcs;
+            const auto& load = s[v].load;
+            
+            // Loop on spatial components
+            for (size_t i = 0u; i < ndof; ++i)
+            {
+                // If free DOF => write to f & post-increase position
+                if (std::isnan(bcs(i)))
+                    f_f(pos_f++) = load(i);
+                // If BC DOF => write to u & pre-decrease position
+                else 
+                    u_b(--pos_u) = bcs(i);
+            }
         }
-        // std::cout << std::endl;
-        auto forces = K_el*u_el - q_el;
-        
-        // std::cout << "K_el:\n" << K_el << std::endl;
-        // std::cout << "u_el:\n" << u_el << std::endl;
-        // std::cout << "q_el:\n" << q_el << std::endl;
-        
-        // Fill result
-        auto res = std::array<fixed_vector<ndof>,2>{};
-        auto& res_a = std::get<0>(res);
-        auto& res_b = std::get<1>(res);
-        
-        for (size_t i = 0u; i < ndof; ++i)
-        {
-            res_a(i) = forces(i);
-            res_b(i) = forces(i+ndof);
-        }
-        return res;
+        return ret;
     }
 };
 
 
+namespace sa {
 
-//------------------------------------- Problem Assembling ---------------------------------------//
 template <>
 struct element_matrix_assembler< truss_kind<2> > 
 {
@@ -254,51 +264,67 @@ struct element_matrix_assembler< truss_kind<3> >
     }
 };
 
+}// end namespace sa
+ 
 
-template <int N>
-struct known_terms_assembler< truss_kind<N> > 
-{
-    template <typename S>
-    std::array<dense_vector, 2>
-    operator()(const S& s, const size_t n_f, const size_t n_b) 
-    {
-        // Aux vars
-        const static int ndof = kind_of<S>::type::ndof;   // #DOF per node (2D => 3, 3D => 6) 
-
-        // Init return var
-# pragma clang diagnostic push
-# pragma clang diagnostic ignored "-Wmissing-braces"
-        auto ret = std::array<dense_vector, 2> {dense_vector(n_f), dense_vector(n_b)};
-# pragma clang diagnostic pop
+//-------------------------------------- Post-processing -----------------------------------------//
+// template <int N> 
+// struct internal_forces_getter< truss_kind<N> > 
+// {
+//     template <typename S>
+//     std::array<fixed_vector<kind_of<S>::type::ndof>,2>
+//     operator()(const typename S::edge_descriptor& e, const S& s, 
+//                const std::vector<real>& u, const std::vector<real>& f) 
+//     {
+//         const static size_t ndof = kind_of<S>::type::ndof; 
         
-        auto& f_f = std::get<0>(ret);   // Force vector (Free DOF only)
-        auto& u_b = std::get<1>(ret);   // Displacement vector (BC DOF only)
+//         // Get local element matrix
+//         auto K_el = assemble_element_matrix(e, s);
         
-        size_t pos_f = 0u;     // f_f incremental iterator
-        size_t pos_u = n_b;    // u_b decremental iterator
+//         // Get bar endings idxs and applied loads
+//         auto a = source(e, s);
+//         auto b = target(e, s);
         
-        for (auto v : boost::make_iterator_range(vertices(s)))
-        {
-            // Get bcs & loads
-            const auto& bcs  = s[v].bcs;
-            const auto& load = s[v].load;
-            
-            // Loop on spatial components
-            for (size_t i = 0u; i < ndof; ++i)
-            {
-                // If free DOF => write to f & post-increase position
-                if (std::isnan(bcs(i)))
-                    f_f(pos_f++) = load(i);
-                // If BC DOF => write to u & pre-decrease position
-                else 
-                    u_b(--pos_u) = bcs(i);
-            }
-        }
-        return ret;
-    }
-};
+//         const auto& load_a = s[a].load;
+//         const auto& load_b = s[b].load;
+        
+//         // NOTE: maybe use a fixed size eigen vector
+//         dense_vector u_el(2*ndof); // Nodal displacements
+//         //~ dense_vector q_el(2*ndof); // Nodal applied loads
+//         auto q_el  = fixed_vector<2*ndof>(); 
+//              q_el << s[a].load, s[b].load;
+    
+//         for (size_t i = 0u; i < ndof; ++i)
+//         {
+//             // Displacements
+//             u_el(i)      = u[ndof*a+i];
+//             u_el(i+ndof) = u[ndof*b+i];
+//             // Loads
+//             q_el(i)      = load_a(i);
+//             q_el(i+ndof) = load_b(i);
+//         }
+//         // std::cout << std::endl;
+//         auto forces = K_el*u_el - q_el;
+        
+//         // std::cout << "K_el:\n" << K_el << std::endl;
+//         // std::cout << "u_el:\n" << u_el << std::endl;
+//         // std::cout << "q_el:\n" << q_el << std::endl;
+        
+//         // Fill result
+//         auto res = std::array<fixed_vector<ndof>,2>{};
+//         auto& res_a = std::get<0>(res);
+//         auto& res_b = std::get<1>(res);
+        
+//         for (size_t i = 0u; i < ndof; ++i)
+//         {
+//             res_a(i) = forces(i);
+//             res_b(i) = forces(i+ndof);
+//         }
+//         return res;
+//     }
+// };
 
     
-}} //end namespace eva
+} //end namespace eva
 
 # endif //__EVA_TRUSS__

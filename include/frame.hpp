@@ -8,7 +8,7 @@
 // eva
 # include "core_sa.hpp"
 
-namespace eva { namespace sa {
+namespace eva {
     
 //######################################## DECLARATIONS ############################################
 
@@ -31,6 +31,21 @@ using frame3d = generic_structure< frame_joint<3>, frame_element<3>, frame_kind<
 
 
 //------------------------------------- Problem Assembling ---------------------------------------//
+
+/// Specializes system_submatrices_assembler functor for both 2D and
+/// 3D trusses.
+/// This specialization simply calls the stiffness_submatrices_assembler
+/// functor, which -in turn- automatically selects the proper
+/// specialization of the element_matrix_assembler functor.
+template <typename A, int N>
+struct system_submatrices_assembler<A, frame_kind<N> >;
+
+/// Specializes known_terms_assembler functor for both 2D and 3D frames
+template <int N>
+struct known_terms_assembler< frame_kind<N> >;
+
+namespace sa
+{
 /// Specializes element_matrix_assembler functor for a 2D frame
 template <> 
 struct element_matrix_assembler< frame_kind<2> >;
@@ -38,26 +53,19 @@ struct element_matrix_assembler< frame_kind<2> >;
 /// Specializes element_matrix_assembler functor for a 3D frame
 template <> 
 struct element_matrix_assembler< frame_kind<3> >;
-
-/// Specializes known_terms_assembler functor for both 2D and 3D frames
-template <int N>
-struct known_terms_assembler<frame_kind<N>>;
-
-}} // end namespaces eva and sa
-
-
-namespace eva {
-//------------------------------------- Results Assembling ---------------------------------------//
-template <int N>
-struct result< sa::frame_kind<N> >;
+}//end namespace sa
 
 //------------------------------------- Results Assembling ---------------------------------------//
 template <int N>
-struct result< sa::frame_kind<N> >
+struct result< frame_kind<N> >;
+
+//------------------------------------- Results Assembling ---------------------------------------//
+template <int N>
+struct result< frame_kind<N> >
 {   
-    constexpr static int ndof = sa::frame_kind<N>::ndof;
-    constexpr static int sdim = sa::frame_kind<N>::sdim;
-    constexpr static int rdim = sa::frame_kind<N>::rdim;
+    constexpr static int ndof = frame_kind<N>::ndof;
+    constexpr static int sdim = frame_kind<N>::sdim;
+    constexpr static int rdim = frame_kind<N>::rdim;
     
     fixed_vector<sdim> displacement;
     fixed_vector<rdim> rotation;
@@ -67,7 +75,7 @@ struct result< sa::frame_kind<N> >
     // Initialize members
     result(const fixed_vector<ndof>& u,
            const fixed_vector<ndof>& f,
-           const sa::frame_joint<N>& p)
+           const frame_joint<N>& p)
         : displacement(u.head(sdim))
         , rotation    (u.tail(rdim))
         , reaction    (f.head(sdim))
@@ -83,11 +91,6 @@ struct result< sa::frame_kind<N> >
     }
 };
 
-
-} // end namespace eva
-
-
-namespace eva { namespace sa {
 
 //######################################## DEFINITIONS #############################################
 
@@ -145,6 +148,81 @@ template <> struct frame_element<3>
 
 
 //-------------------------------------- Problem Assembling --------------------------------------//
+
+template <typename A, int N>
+struct system_submatrices_assembler<A, frame_kind<N> >
+{
+    template <typename S>
+    auto
+    operator()(const S& s,
+               const std::vector<index_t>& dofmap,
+               const size_t n_f, const size_t n_b)
+    {
+        return sa::stiffness_submatrices_assembler<A>()(s, dofmap, n_f, n_b);
+    }    
+};
+
+
+template <int N>
+struct known_terms_assembler< frame_kind<N> > 
+{
+    template <typename S>
+    std::array<dense_vector, 2>
+    operator()(const S& s, const size_t n_f, const size_t n_b) 
+    {
+        
+        // Aux vars
+        const static size_t ndof = kind_of<S>::type::ndof;
+        
+        // Init ret var
+# pragma clang diagnostic push
+# pragma clang diagnostic ignored "-Wmissing-braces"
+        auto ret = std::array<dense_vector, 2> {dense_vector(n_f),
+                                                dense_vector(n_b)};
+# pragma clang diagnostic pop
+        
+        auto& f_f = std::get<0>(ret);   // Force vector (Free DOF only)
+        auto& u_b = std::get<1>(ret);   // Displacement vector (BC DOF only)
+        
+        size_t pos_f = 0u;     // f_f incremental iterator
+        size_t pos_u = n_b;    // u_b decremental iterator
+        
+        for (auto v : boost::make_iterator_range(vertices(s)))
+        {
+            // Get bcs, loads and torques
+            const auto& bcs    = s[v].bcs;
+            const auto& load   = s[v].load;
+            const auto& torque = s[v].torque;
+            
+            // Source term storage for DOF associated with vertex v:
+            // concatenate load and torque
+            auto rhs_v = fixed_vector<ndof>();
+            rhs_v << load, torque;
+            
+            // Compute equivalent load configuration for 
+            // a distributed load a/o a concentrated load
+            // ...
+            // ...
+            
+            // Fill known term vectors
+            for (size_t i = 0u; i < ndof; ++i)
+            {
+                // If free DOF => write to f & post-increase position
+                if (std::isnan(bcs(i)))
+                    f_f(pos_f++) = rhs_v(i);
+                // If BC DOF => write to u & pre-decrease position
+                else 
+                    u_b(--pos_u) = bcs(i);
+            }
+        }
+        
+        return ret;
+    }
+};
+
+
+namespace sa {
+
 template <> 
 struct element_matrix_assembler< frame_kind<2> > 
 {
@@ -260,67 +338,9 @@ struct element_matrix_assembler< frame_kind<3> >
     }
 };
 
-
-template <int N>
-struct known_terms_assembler< frame_kind<N> > 
-{
-    template <typename S>
-    std::array<dense_vector, 2>
-    operator()(const S& s, const size_t n_f, const size_t n_b) 
-    {
-        
-        // Aux vars
-        const static size_t ndof = kind_of<S>::type::ndof;
-        
-        // Init ret var
-# pragma clang diagnostic push
-# pragma clang diagnostic ignored "-Wmissing-braces"
-        auto ret = std::array<dense_vector, 2> {dense_vector(n_f),
-                                                dense_vector(n_b)};
-# pragma clang diagnostic pop
-        
-        auto& f_f = std::get<0>(ret);   // Force vector (Free DOF only)
-        auto& u_b = std::get<1>(ret);   // Displacement vector (BC DOF only)
-        
-        size_t pos_f = 0u;     // f_f incremental iterator
-        size_t pos_u = n_b;    // u_b decremental iterator
-        
-        for (auto v : boost::make_iterator_range(vertices(s)))
-        {
-            // Get bcs, loads and torques
-            const auto& bcs    = s[v].bcs;
-            const auto& load   = s[v].load;
-            const auto& torque = s[v].torque;
-            
-            // Source term storage for DOF associated with vertex v:
-            // concatenate load and torque
-            auto rhs_v = fixed_vector<ndof>();
-            rhs_v << load, torque;
-            
-            // Compute equivalent load configuration for 
-            // a distributed load a/o a concentrated load
-            // ...
-            // ...
-            
-            // Fill known term vectors
-            for (size_t i = 0u; i < ndof; ++i)
-            {
-                // If free DOF => write to f & post-increase position
-                if (std::isnan(bcs(i)))
-                    f_f(pos_f++) = rhs_v(i);
-                // If BC DOF => write to u & pre-decrease position
-                else 
-                    u_b(--pos_u) = bcs(i);
-            }
-        }
-        
-        return ret;
-    }
-};
+}//end namespace sa
 
 
-
-
-}} //end namespace eva
+} //end namespace eva
 
 # endif //__EVA_FRAME__

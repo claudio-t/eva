@@ -32,55 +32,44 @@ template <typename S>
 void 
 setup_joint_properties(S& structure, boost::dynamic_properties& dyna_props);
 
-/// Functor that selects the joint properties that have to be red
-/// from the input file. Has to be specialized for each joint type
-template <typename JointProps>
-struct properties_selector;
-
-/// Specialization for reading a truss joint 
-template <int N>
-struct properties_selector< sa::truss_joint<N>>;
-
-/// Specialization for reading a 2D frame joint 
-template <>
-struct properties_selector< sa::frame_joint<2>>;
-
 /// Adds to the dynamic property map the properties required for
 /// reading a given structure
 template <typename S> 
 void 
 setup_element_properties(S& structure, boost::dynamic_properties& dyna_props);
 
-/// Functor that selects the element properties that have to be red
-/// from the input file. Has to be specialized for each element type
-template <typename ElementProps>
+/// Functor that selects the joint properties that have to be red
+/// from the input file. Has to be specialized for each joint and
+/// element type
+template <typename Props>
 struct properties_selector;
+
+
+#ifdef __EVA_TRUSS__
+/// Specialization for reading a truss joint 
+template <int N>
+struct properties_selector< truss_joint<N>>;
 
 /// Specialization for reading a truss_element
 template <int N>
-struct properties_selector< sa::truss_element<N> >;
+struct properties_selector< truss_element<N> >;
+#endif//__EVA_TRUSS__
+
+
+#ifdef __EVA_FRAME__
+/// Specialization for reading a 2D frame joint 
+template <>
+struct properties_selector< frame_joint<2>>;
 
 /// Specialization for reading a 2D frame element
 template <>
-struct properties_selector< sa::frame_element<2> >;
-
+struct properties_selector< frame_element<2> >;
+#endif//__EVA_FRAME__
 
 //------------------------------------------ Write -----------------------------------------------//
 template <typename S>
 auto make_joint_properties_writer(const S& structure);
 
-/// Functor that selects the joint properties that have to be written
-/// to the output file. Has to be specialized for each joint type
-template <typename S, typename JointProperties>
-class properties_writer;
-
-/// Specialization for writing a truss joint
-template <typename S, int N>
-class properties_writer< S, sa::truss_joint<N> >;
-
-/// Specialization for writing a 2D frame joint
-template <typename S>
-class properties_writer< S, sa::frame_joint<2> >;
 
 template <typename S>
 auto make_element_properties_writer(const S& structure);
@@ -92,6 +81,24 @@ to_string(
     const std::string lx_delim = "[",
     const std::string rx_delim = "]");
 
+
+/// Functor that selects the joint properties that have to be written
+/// to the output file. Has to be specialized for each joint type
+template <typename S, typename JointProperties>
+class properties_writer;
+
+#ifdef __EVA_TRUSS__
+/// Specialization for writing a truss joint
+template <typename S, int N>
+class properties_writer< S, truss_joint<N> >;
+#endif//__EVA_TRUSS__
+
+
+#ifdef __EVA_FRAME__
+/// Specialization for writing a 2D frame joint
+template <typename S>
+class properties_writer< S, frame_joint<2> >;
+#endif//__EVA_FRAME__
 
 
 //####################################### DEFINITIONS ##############################################
@@ -117,8 +124,26 @@ S read_from_graphviz(const std::string& filename)
 }
 
 
+template <typename S> 
+void
+setup_joint_properties(S& s, boost::dynamic_properties& dps) 
+{
+    properties_selector<typename joint_of<S>::type>()(s, dps);
+}
+
+
+template <typename S> 
+void
+setup_element_properties(S& s, boost::dynamic_properties& dps) 
+{
+    properties_selector<typename element_of<S>::type>()(s, dps);
+}
+
+
+#ifdef __EVA_TRUSS__
+
 template <int N>
-struct properties_selector< sa::truss_joint<N> > 
+struct properties_selector< truss_joint<N> > 
 {    
     template <typename S> 
     void 
@@ -135,7 +160,7 @@ struct properties_selector< sa::truss_joint<N> >
 
 
 template <int N>
-struct properties_selector< sa::truss_element<N> > 
+struct properties_selector< truss_element<N> > 
 {    
     template <typename S> 
     void 
@@ -148,10 +173,12 @@ struct properties_selector< sa::truss_element<N> >
         dps.property("A", get(&edge_prop_type::A, structure));
     }
 };
+#endif//__EVA_TRUSS__
 
 
+#ifdef __EVA_FRAME__
 template <>
-struct properties_selector< sa::frame_joint<2> > 
+struct properties_selector< frame_joint<2> > 
 {    
     template <typename S> 
     void 
@@ -169,7 +196,7 @@ struct properties_selector< sa::frame_joint<2> >
 };
 
 template <>
-struct properties_selector< sa::frame_element<2> > 
+struct properties_selector< frame_element<2> > 
 {    
     template <typename S> 
     void 
@@ -183,22 +210,7 @@ struct properties_selector< sa::frame_element<2> >
         dps.property("I", get(&edge_prop_type::I, structure));
     }
 };
-
-
-template <typename S> 
-void
-setup_joint_properties(S& s, boost::dynamic_properties& dps) 
-{
-    properties_selector<typename joint_of<S>::type>()(s, dps);
-}
-
-
-template <typename S> 
-void
-setup_element_properties(S& s, boost::dynamic_properties& dps) 
-{
-    properties_selector<typename element_of<S>::type>()(s, dps);
-}
+#endif//__EVA_FRAME__
 
 
 //------------------------------------------ Write -----------------------------------------------//
@@ -209,8 +221,9 @@ make_joint_properties_writer(const S& s)
     return properties_writer<S, typename joint_of<S>::type>(s);
 }
 
+#ifdef __EVA_TRUSS__
 template <typename S, int N>
-class properties_writer< S, sa::truss_joint<N> >
+class properties_writer< S, truss_joint<N> >
 {
 public:
     using props = typename joint_of<S>::type;
@@ -219,7 +232,7 @@ public:
     using property_map_t = boost::vec_adj_list_vertex_property_map<
         S, const S *,
         P, const P&,
-        P eva::sa::truss_joint<N>::*
+        P eva::truss_joint<N>::*
         >;
 
     /// Constructor that initializes member data
@@ -250,20 +263,23 @@ protected:
     const property_map_t< fixed_vector<N> >  loads_list_;
     const property_map_t< fixed_vector<N> >    bcs_list_;
 };
+#endif//__EVA_TRUSS__
 
+
+#ifdef __EVA_FRAME__
 template <typename S>
-class properties_writer< S, sa::frame_joint<2> >
-    // : public properties_writer< S, sa::truss_joint<2> >
+class properties_writer< S, frame_joint<2> >
+    // : public properties_writer< S, truss_joint<2> >
 {
 public:
     using props = typename joint_of<S>::type;
-    using base_t = properties_writer< S, sa::truss_joint<2> >;
+    using base_t = properties_writer< S, truss_joint<2> >;
 
     template <typename P>
     using property_map_t = boost::vec_adj_list_vertex_property_map<
         S, const S *,
         P, const P&,
-        P eva::sa::frame_joint<2>::*
+        P eva::frame_joint<2>::*
         >;
 
     /// Constructor that initializes member data
@@ -303,7 +319,7 @@ protected:
     const property_map_t< fixed_vector<1> > torques_list_;
     
 };
-
+#endif//__EVA_FRAME__
 
 //------------------------------------------ Write -----------------------------------------------//
 
@@ -323,11 +339,6 @@ to_string(const fixed_vector<N>& v,
 }
 
 } //end namespace eva
-
-
-
-
-
 
 
 
