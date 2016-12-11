@@ -1,5 +1,5 @@
-# ifndef __EVA_STRUCTURAL_ANALYSIS__
-# define __EVA_STRUCTURAL_ANALYSIS__
+# ifndef __CORE_SA__
+# define __CORE_SA__
 
 /// @file  core_sa.hpp
 /// @brief Contains common functions and functors used to solve
@@ -8,11 +8,6 @@
 # include "core.hpp"
 
 namespace eva { namespace sa {
-
-// In core_sa ci va:
-// specializzazione per stiffness_submatrices_assembler e
-// known_terms_assembler da usare con frame e truss.
-// (Quindi anche le varie assemble element matrix..)
 
 
 //------------------------------------- Problem Assembling ---------------------------------------//
@@ -67,6 +62,4 @@ count_nnz_entries(const S& s, const std::vector<index_t>& dofmap,
 ////////////////////////////////////////////////////////////////////////////////////////////////////
 # include "../src/core_sa.tcc"
 
-
-
-# endif //__EVA_STRUCTURAL_ANALYSIS__
+# endif //__CORE_SA__

@@ -32,6 +32,6 @@ set(SOURCES ${SRC_DIR}/vtk.cpp)
 
 ## Specify subfolders ##
 add_subdirectory("tests")
-add_subdirectory("pagmo")
+#add_subdirectory("pagmo")
 
 
