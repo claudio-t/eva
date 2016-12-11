@@ -442,8 +442,88 @@ struct vtk_joint_properties_adder< result< frame_kind<2> > >
         ugrid->GetPointData()->AddArray(d_torque);
     }
 };
-
 #endif//__EVA_FRAME__
+
+
+#ifdef __EVA_THERMO__
+
+// template <>
+// struct vtk_joint_properties_adder<thermo_joint> 
+// {    
+//     template <typename S> 
+//     void operator()(const S& s, vtk_sptr<vtkUnstructuredGrid> ugrid)
+//     {   
+//         // Init results containers
+//         vtk_sptr<vtkDoubleArray>
+//             d_bc_d(vtk_sptr<vtkDoubleArray>::New()),
+//             d_flux(vtk_sptr<vtkDoubleArray>::New());
+
+//         d_bc_d->SetName("BC Temperature [K]")
+//         d_flux->SetName("BC flux [W/(m*K)]");
+        
+//         for (const auto& v : boost::make_iterator_range(vertices(structure)))
+//         {
+//             const auto& vp = s[v];
+//             d_bc_d->InsertNextValue(vp.bc_d);
+//             d_flux->InsertNextValue(vp.flux);
+//         }        
+        
+//         // Add properties to grid
+//         ugrid->GetCellData()->AddArray(d_bc_d);
+//         ugrid->GetCellData()->AddArray(d_flux);
+//     }
+// };
+
+// template <>
+// struct vtk_element_properties_adder<thermo_element> 
+// {    
+//     template <typename S> 
+//     void operator()(const S& s, vtk_sptr<vtkUnstructuredGrid> ugrid)
+//     {   
+//         // Init properties containers
+//         vtk_sptr<vtkDoubleArray> d_k(vtk_sptr<vtkDoubleArray>::New());
+        
+//         d_k->SetName("k [W/(m*K)]");
+        
+//         for (const auto& e : make_iterator_range(edges(s)))
+//         {
+//             const auto& ep = s[e];
+//             d_k->InsertNextValue(ep.E);
+//         }
+//         // Add properties to grid
+//         ugrid->GetCellData()->AddArray(d_k);
+//     }
+// };
+
+// template <>
+// struct vtk_joint_properties_adder< result<thermo_kind> > 
+// {    
+//     template <typename S> 
+//     void operator()(const S& structure,
+//                     const std::vector< typename result_of<S>::type >& results,
+//                     vtk_sptr<vtkUnstructuredGrid> ugrid)
+//     {
+//         // Init results containers
+//         vtk_sptr<vtkDoubleArray>
+//             d_T(vtk_sptr<vtkDoubleArray>::New()),
+//             d_flux(vtk_sptr<vtkDoubleArray>::New());
+
+//         d_bc_d->SetName("Absolute Temperature [K]")
+//         d_flux->SetName("Heat Flux [W/(m*K)]");
+        
+//         for (const auto& v : boost::make_iterator_range(vertices(structure)))
+//         {
+//             const auto& rv = results[v];
+//             d_bc_d->InsertNextValue(rv.bc_d);
+//             d_flux->InsertNextValue(rv.flux);
+//         }        
+        
+//         // Add properties to grid
+//         ugrid->GetCellData()->AddArray(d_bc_d);
+//         ugrid->GetCellData()->AddArray(d_flux);
+//     }
+// };
+#endif//__EVA_THERMO__
 
 } // end namespace eva
 

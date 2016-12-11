@@ -273,7 +273,7 @@ class properties_writer< S, frame_joint<2> >
 {
 public:
     using props = typename joint_of<S>::type;
-    using base_t = properties_writer< S, truss_joint<2> >;
+    // using base_t = properties_writer< S, truss_joint<2> >;
 
     template <typename P>
     using property_map_t = boost::vec_adj_list_vertex_property_map<

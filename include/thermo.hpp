@@ -1,3 +1,5 @@
+# ifndef __EVA_THERMO__
+# define __EVA_THERMO__
 /**
  * @file thermo.hpp
  * @brief Contains methods and classes to solve thermal problems on structures.
@@ -66,7 +68,7 @@ struct thermo_joint
 
 struct thermo_element
 {
-    real k; // Thermal conductivity
+    real k; // Thermal conductivity [W/(m*K)]
 };
 
 
@@ -218,4 +220,6 @@ struct result<thermo_kind>
 
 
 } // end namespaces
+
+# endif//__EVA_THERMO__
 

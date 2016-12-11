@@ -7,6 +7,7 @@
  */
 // eva
 # include "core_sa.hpp"
+# include "truss.hpp"
 
 namespace eva {
     
