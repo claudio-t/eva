@@ -3,16 +3,24 @@
 ///        declared in file core_sa.hpp .
 
 
-namespace eva { namespace sa {
+namespace eva {
 
 //------------------------------------- Problem Assembling ---------------------------------------//
 
 
-template <typename S> 
+template <typename S, typename Kind> 
 auto
-assemble_element_matrix(const typename S::edge_descriptor& e, const S& s) 
+assemble_element_matrix(
+    const typename S::edge_descriptor& e,
+    const S& s, const Kind kind) 
 {
-    return element_matrix_assembler<typename kind_of<S>::type>()(e, s);
+
+    // using kind_t = typename std::conditional<
+    //     std::is_same<typename kind_of<S>::type, Kind>::value,
+        
+    //     >::type;
+    
+    return element_matrix_assembler<Kind>()(e, s);
 }
 
 template <typename StructureKind> 
@@ -29,8 +37,8 @@ struct element_matrix_assembler
 
 
 
-template <>
-struct stiffness_submatrices_assembler<dense_algebra_t>
+template <typename Kind>
+struct stiffness_submatrices_assembler<Kind, dense_algebra_t>
 {
     template <typename Structure>
     std::array<dense_matrix, 3>
@@ -38,7 +46,7 @@ struct stiffness_submatrices_assembler<dense_algebra_t>
                const std::vector<index_t>& dofmap,
                const size_t n_f, const size_t n_b)
     {
-        constexpr size_t dim = kind_of<Structure>::type::ndof;
+        constexpr size_t dim = Kind::ndof;
         
         // Init SYSTEM SUB-matrices
         dense_matrix K_ff = dense_matrix::Zero(n_f, n_f);
@@ -56,7 +64,7 @@ struct stiffness_submatrices_assembler<dense_algebra_t>
             auto loc_to_glob = build_local_to_global_dofmap<dim>(na, nb, dofmap);
                     
             // Get ELEMENT stiffness matrix in GLOBAL coordinates
-            auto K_e = assemble_element_matrix(e, s);
+            auto K_e = element_matrix_assembler<Kind>()(e, s);
             
             // Compose SYSTEM submatrices
             for (size_t i = 0; i < 2*dim; ++i)
@@ -84,8 +92,8 @@ struct stiffness_submatrices_assembler<dense_algebra_t>
     }
 };
 
-template <>
-struct stiffness_submatrices_assembler<sparse_algebra_t>
+template <typename Kind>
+struct stiffness_submatrices_assembler<Kind, sparse_algebra_t>
 {
     template <typename Structure>
     std::array<sparse_matrix, 3>
@@ -103,10 +111,10 @@ struct stiffness_submatrices_assembler<sparse_algebra_t>
                   const std::vector<index_t>& dofmap,
                   const size_t n_f, const size_t n_b)
     {
-        constexpr size_t dim = kind_of<Structure>::type::ndof; 
+        constexpr size_t dim = Kind::ndof;
         
         // Compute number of non-zero entries for each matrix
-        auto nnzs = count_nnz_entries(s, dofmap, n_f, n_b);
+        auto nnzs = count_nnz_entries<dim>(s, dofmap, n_f, n_b);
 
         auto nnz_tot = std::array<size_t, 3> ();
         for (size_t i = 0u; i < 3u; ++i)
@@ -131,7 +139,7 @@ struct stiffness_submatrices_assembler<sparse_algebra_t>
             auto loc_to_glob = build_local_to_global_dofmap<dim>(na, nb, dofmap);
                     
             // Get ELEMENT stiffness matrix in GLOBAL coordinates
-            auto K_e = assemble_element_matrix(e, s);
+            auto K_e = element_matrix_assembler<Kind>()(e, s);
         
             // Compose SYSTEM submatrices
             for (size_t i = 0; i < 2*dim; ++i)
@@ -179,10 +187,10 @@ struct stiffness_submatrices_assembler<sparse_algebra_t>
                   const std::vector<index_t>& dofmap,
                   const size_t n_f, const size_t n_b)
     {    
-        constexpr size_t dim = kind_of<Structure>::type::ndof; 
+        constexpr size_t dim = Kind::ndof; 
             
         // Compute number of non-zero entries for each matrix
-        auto nnzs = count_nnz_entries(s, dofmap, n_f, n_b);
+        auto nnzs = count_nnz_entries<dim>(s, dofmap, n_f, n_b);
         
         // Init submatrices
 # pragma clang diagnostic push
@@ -212,7 +220,7 @@ struct stiffness_submatrices_assembler<sparse_algebra_t>
             auto loc_to_glob = build_local_to_global_dofmap<dim>(na, nb, dofmap);
                     
             // Get ELEMENT stiffness matrix in GLOBAL coordinates
-            auto K_e = assemble_element_matrix(e, s);
+            auto K_e = element_matrix_assembler<Kind>()(e, s);
         
             // Compose SYSTEM submatrices
             for (size_t i = 0; i < 2*dim; ++i)
@@ -241,13 +249,13 @@ struct stiffness_submatrices_assembler<sparse_algebra_t>
 };
 
 
-template <typename S>
+template <size_t Dim, typename S>
 std::array<std::vector<size_t>, 3>
 count_nnz_entries(const S& s, const std::vector<index_t>& dofmap,
                   const size_t n_f, const size_t n_b) 
 {    
     // Aux vars
-    constexpr size_t dim = kind_of<S>::type::ndof;
+    constexpr size_t dim = Dim;//kind_of<S>::type::ndof;
     
     // Init return variables
 // # pragma clang diagnostic push
@@ -319,11 +327,29 @@ count_nnz_entries(const S& s, const std::vector<index_t>& dofmap,
 # pragma clang diagnostic pop
 }
 
-}} //end namespace eva and sa
+//------------------------------------- Post-processing -----------------------------------------//
+template <typename Structure, typename Result>
+real compute_compliance(
+    const Structure & structure,
+    const std::vector<Result> & results)
+{
+    real compliance = 0.;
+    
+    for (const auto v : boost::make_iterator_range(vertices(structure)))
+        compliance += structure[v].load.transpose() * results[v].displacement;
+    
+    return compliance;
+}
+
+} //end namespace eva
 
 
 
-// //-------------------------------------- Post-processing -----------------------------------------//
+
+
+
+
+
 // template <typename StructureKind> 
 // struct internal_forces_getter 
 // {

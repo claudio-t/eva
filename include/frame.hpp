@@ -45,8 +45,6 @@ struct system_submatrices_assembler<A, frame_kind<N> >;
 template <int N>
 struct known_terms_assembler< frame_kind<N> >;
 
-namespace sa
-{
 /// Specializes element_matrix_assembler functor for a 2D frame
 template <> 
 struct element_matrix_assembler< frame_kind<2> >;
@@ -54,7 +52,7 @@ struct element_matrix_assembler< frame_kind<2> >;
 /// Specializes element_matrix_assembler functor for a 3D frame
 template <> 
 struct element_matrix_assembler< frame_kind<3> >;
-}//end namespace sa
+
 
 //------------------------------------- Results Assembling ---------------------------------------//
 template <int N>
@@ -100,7 +98,16 @@ template <int N> struct frame_kind
 {         
     constexpr static int ndof = 3*(N-1); // #(tot DOF)
     constexpr static int sdim = N;       // #(spatial coordinates)
-    constexpr static int rdim = 2*N-3;   // #(rotations/torque dimensions)
+    constexpr static int rdim = 2*N-3;   // #(rotations/torque
+                                         // #dimensions)
+
+    using joint_type   = frame_joint<N>;
+    using element_type = frame_element<N>;
+    using result_type  = result< frame_kind<N> >;
+
+    
+    using default_dense_solver_t  = Eigen::LDLT<dense_matrix>;
+    using default_sparse_solver_t = Eigen::ConjugateGradient<sparse_matrix>;
 };
 
 
@@ -159,7 +166,7 @@ struct system_submatrices_assembler<A, frame_kind<N> >
                const std::vector<index_t>& dofmap,
                const size_t n_f, const size_t n_b)
     {
-        return sa::stiffness_submatrices_assembler<A>()(s, dofmap, n_f, n_b);
+        return stiffness_submatrices_assembler<frame_kind<N>, A>()(s, dofmap, n_f, n_b);
     }    
 };
 
@@ -173,7 +180,7 @@ struct known_terms_assembler< frame_kind<N> >
     {
         
         // Aux vars
-        const static size_t ndof = kind_of<S>::type::ndof;
+        const static size_t ndof = frame_kind<N>::ndof;
         
         // Init ret var
 # pragma clang diagnostic push
@@ -221,8 +228,6 @@ struct known_terms_assembler< frame_kind<N> >
     }
 };
 
-
-namespace sa {
 
 template <> 
 struct element_matrix_assembler< frame_kind<2> > 
@@ -338,9 +343,6 @@ struct element_matrix_assembler< frame_kind<3> >
         return k;
     }
 };
-
-}//end namespace sa
-
 
 } //end namespace eva
 

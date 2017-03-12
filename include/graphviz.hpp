@@ -59,12 +59,22 @@ struct properties_selector< truss_element<N> >;
 #ifdef __EVA_FRAME__
 /// Specialization for reading a 2D frame joint 
 template <>
-struct properties_selector< frame_joint<2>>;
+struct properties_selector< frame_joint<2> >;
 
 /// Specialization for reading a 2D frame element
 template <>
 struct properties_selector< frame_element<2> >;
 #endif//__EVA_FRAME__
+
+#ifdef __EVA_THERMO__
+/// Specialization for reading a 2D frame joint 
+template <typename BaseKind>
+struct properties_selector< thermo_joint<BaseKind> >;
+
+/// Specialization for reading a 2D frame element
+template <typename BaseKind>
+struct properties_selector< thermo_element<BaseKind> >;
+#endif//__EVA_THERMO__
 
 //------------------------------------------ Write -----------------------------------------------//
 template <typename S>
@@ -212,6 +222,49 @@ struct properties_selector< frame_element<2> >
 };
 #endif//__EVA_FRAME__
 
+
+#ifdef __EVA_THERMO__
+
+template <typename BaseKind>
+struct properties_selector< thermo_joint<BaseKind> > 
+{    
+    template <typename S> 
+    void 
+    operator()(S& structure, boost::dynamic_properties& dps) 
+    {
+        using vert_prop_type = typename joint_of<S>::type;
+
+        // Fill base kind props
+        using base_kind_type = typename kind_of<S>::type::base_kind_t;
+        using base_vert_prop = typename base_kind_type::joint_type;
+        properties_selector<base_vert_prop>()(structure, dps);
+        
+        // Read coordinates and boundary conditions
+        // dps.property( "coords", get(&vert_prop_type::coords, structure));
+        dps.property(   "T_bc", get(&vert_prop_type::T_bc,   structure));
+        dps.property("flux_bc", get(&vert_prop_type::flux_bc,structure));
+    }
+};
+
+template <typename BaseKind>
+struct properties_selector< thermo_element<BaseKind> > 
+{    
+    template <typename S> 
+    void 
+    operator()(S& structure, boost::dynamic_properties& dps)
+    {
+        using edge_prop_type = typename element_of<S>::type;
+
+        // Fill base kind props
+        using base_edge_prop = typename edge_prop_type::base_type;   
+        properties_selector<base_edge_prop>()(structure, dps);        
+        
+        // Read thermal conductity coefficient and cross sectional area
+        dps.property("k", get(&edge_prop_type::k, structure));        
+        // dps.property("A", get(&edge_prop_type::A, structure));
+    }
+};
+#endif//__EVA_THERMO__
 
 //------------------------------------------ Write -----------------------------------------------//
 template <typename S>

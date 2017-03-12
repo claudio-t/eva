@@ -86,16 +86,17 @@ using sparse_solver_params = solver_params<sparse_algebra_t, S>;
 
 /// Solves a given problem automatically deducing the structure type
 template <
-    typename Params = sparse_solver_params<>,
-    typename Kind = void, typename Structure
+    typename Structure,
+    typename Kind,
+    typename Params//sparse_solver_params<>,
     >
 auto
-solve(const Structure& structure, Params p = Params());
+solve(const Structure& structure, const Kind kind = Kind(), const Params p = Params());
 
 
 //------------------------------------- Problem Assembling ---------------------------------------//
 /// Assembles the system stiffness matrix in global coordinates.
-template <typename A, typename S>
+template <typename A, typename S, typename Kind = void>
 auto
 assemble_system_submatrices(const S& s, const std::vector<index_t>& dofmap,
                                const size_t n_f, const size_t n_b);
@@ -120,12 +121,12 @@ struct known_terms_assembler;
 //---------------------------------------- DOF handling ------------------------------------------//
 /// Builds a DOF map where the positions of DOF associated 
 /// to BCs are located at the end
-template <typename S>
+template <typename Kind = void, typename S>
 std::tuple<std::vector<index_t>, size_t, size_t>
 build_global_dofmap(const S& s);
 
 /// Actual implementation of build_global_dofmap.
-template <int D>
+template <typename Kind, size_t Dim>
 struct global_dofmap_builder;
 
 /// Builds the (element) local to global DOF map

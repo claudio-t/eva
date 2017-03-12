@@ -21,11 +21,15 @@
 # include <vtkRenderWindow.h>
 # include <vtkRenderWindowInteractor.h>
 # include <vtkXMLUnstructuredGridWriter.h>
+# include <vtkXMLPolyDataWriter.h>
 # include <vtkUnstructuredGrid.h>
+# include <vtkCellIterator.h>
 # include <vtkPointData.h>
 # include <vtkProperty.h>
 # include <vtkCellData.h>
 # include <vtkDoubleArray.h>
+# include <vtkIndent.h>
+
 
 
 namespace eva {
@@ -37,24 +41,36 @@ template <typename T> using vtk_sptr = vtkSmartPointer<T>;
 template <typename S>
 vtk_sptr<vtkUnstructuredGrid> to_unstructured_grid(const S& s);
 
+vtk_sptr<vtkPolyData> to_polydata(vtk_sptr<vtkUnstructuredGrid> ugrid);
+
+
 template <typename Structure>
 vtk_sptr<vtkRenderWindowInteractor>
 display(const Structure& structure);
 
+template <typename Structure>
 vtk_sptr<vtkRenderWindowInteractor>
-display(const vtk_sptr<vtkUnstructuredGrid> ugrid);
+display(
+    const Structure& structure,
+    const std::vector<typename result_of<Structure>::type>& results);
+
+vtk_sptr<vtkRenderWindowInteractor>
+display_grid(const vtk_sptr<vtkUnstructuredGrid> ugrid, bool displace = false);
 
 
-template<typename S>
+template<typename Structure>
 void
-write_vtu(const S& structure,
-          const std::vector<typename result_of<S>::type>& results,
+write_vtu(const Structure& structure,
+          const std::vector<typename result_of<Structure>::type>& results,
           const std::string& filename);
 
 void
 write_vtu(const vtk_sptr<vtkUnstructuredGrid> ugrid,
           const std::string& filename);
 
+
+void write_3d(const vtk_sptr<vtkUnstructuredGrid> ugrid,
+               const std::string& filename);
 
 /// Adds the joint (node) properties of the structure to the vtk
 /// unstructured grid object 
@@ -138,6 +154,23 @@ struct vtk_element_properties_adder< frame_element<2> >;
 
 #endif//__EVA_FRAME__
 
+#ifdef __EVA_THERMO__
+
+/// Specialization for a truss_element
+template <typename BaseKind>
+struct vtk_joint_properties_adder< thermo_joint<BaseKind> >;
+
+/// Specialization for a truss_element
+template <typename BaseKind>
+struct vtk_element_properties_adder< thermo_element<BaseKind> >;
+
+
+/// Specialization for a truss result type
+template <typename BaseKind>
+struct vtk_joint_properties_adder< result< thermo_kind<BaseKind> > >;
+
+#endif//__EVA_THERMO__
+
 //####################################### DEFINITIONS ##############################################
 
 
@@ -153,7 +186,7 @@ vtk_sptr<vtkUnstructuredGrid> to_vtk_unstructured_grid(
     vtk_add_joint_properties(structure, results, ugrid);
 
     // Add element (edge) properties
-    // vtk_add_element_properties(s, ugrid);
+    vtk_add_element_properties(structure, ugrid);
     
     return ugrid;
 }
@@ -195,7 +228,7 @@ vtk_sptr<vtkUnstructuredGrid> to_vtk_unstructured_grid(const S& structure)
     ugrid->SetPoints(points);
     ugrid->SetCells(VTK_LINE, cells);
 
-    // Add element (edge) properties
+    // Add joint (node) properties
     vtk_add_joint_properties(structure, ugrid);
 
     // Add element (edge) properties
@@ -204,15 +237,28 @@ vtk_sptr<vtkUnstructuredGrid> to_vtk_unstructured_grid(const S& structure)
     return ugrid;
 }
 
+// ---------- DISPLAY ---------- //
 
 template <typename Structure>
 vtk_sptr<vtkRenderWindowInteractor>
 display(const Structure& structure)
 {
     auto ugrid = to_vtk_unstructured_grid(structure);
-    return display(ugrid);
+    return display_grid(ugrid);
 }
 
+template <typename Structure>
+vtk_sptr<vtkRenderWindowInteractor>
+display(
+    const Structure& structure,
+    const std::vector<typename result_of<Structure>::type>& results)
+{
+    auto ugrid = to_vtk_unstructured_grid(structure, results);
+    return display_grid(ugrid, true);
+}
+
+
+// ---------- Write VTU ---------- //
 
 template<typename S>
 void
@@ -232,6 +278,29 @@ write_vtu(const S& structure, const std::string& filename)
     write_vtu(ugrid, filename);
 }
 
+
+// ---------- Write VTP ---------- //
+
+template<typename S>
+void
+write_3d(const S& structure,
+          const std::vector<typename result_of<S>::type>& results,
+          const std::string& filename)
+{
+    auto ugrid = to_vtk_unstructured_grid(structure, results);
+    write_3d(ugrid, filename);
+}
+
+template<typename S>
+void
+write_3d(const S& structure, const std::string& filename)
+{
+    auto ugrid = to_vtk_unstructured_grid(structure);
+    write_3d(ugrid, filename);
+}
+
+
+// ---------- ADDERS ---------- //
 
 template <typename S> 
 void vtk_add_joint_properties(const S& structure, vtk_sptr<vtkUnstructuredGrid> ugrid)
@@ -328,6 +397,7 @@ struct vtk_element_properties_adder< truss_element<N> >
         // Add properties to grid
         ugrid->GetCellData()->AddArray(d_E);
         ugrid->GetCellData()->AddArray(d_A);
+        // ugrid->GetCellData()->SetScalars(d_A);
     }
 };
 
@@ -447,82 +517,90 @@ struct vtk_joint_properties_adder< result< frame_kind<2> > >
 
 #ifdef __EVA_THERMO__
 
-// template <>
-// struct vtk_joint_properties_adder<thermo_joint> 
-// {    
-//     template <typename S> 
-//     void operator()(const S& s, vtk_sptr<vtkUnstructuredGrid> ugrid)
-//     {   
-//         // Init results containers
-//         vtk_sptr<vtkDoubleArray>
-//             d_bc_d(vtk_sptr<vtkDoubleArray>::New()),
-//             d_flux(vtk_sptr<vtkDoubleArray>::New());
+template<typename BaseKind>
+struct vtk_joint_properties_adder< thermo_joint<BaseKind> > 
+{    
+    template <typename S> 
+    void operator()(const S& s, vtk_sptr<vtkUnstructuredGrid> ugrid)
+    {
+        // Add base kind stuff
+        using base_joint_t = typename BaseKind::joint_type;
+        vtk_joint_properties_adder<base_joint_t>()(s, ugrid);
+        
+        // Init results containers
+        vtk_sptr<vtkDoubleArray>
+            d_T_bc   (vtk_sptr<vtkDoubleArray>::New()),
+            d_flux_bc(vtk_sptr<vtkDoubleArray>::New());
 
-//         d_bc_d->SetName("BC Temperature [K]")
-//         d_flux->SetName("BC flux [W/(m*K)]");
+        d_T_bc   ->SetName("BC Temperature [K]");
+        d_flux_bc->SetName("BC Heat Flux [W/(m*K)]");
         
-//         for (const auto& v : boost::make_iterator_range(vertices(structure)))
-//         {
-//             const auto& vp = s[v];
-//             d_bc_d->InsertNextValue(vp.bc_d);
-//             d_flux->InsertNextValue(vp.flux);
-//         }        
+        for (const auto & v : boost::make_iterator_range(vertices(s)))
+        {
+            const auto & vp = s[v];
+            d_T_bc   ->InsertNextValue(vp.T_bc  );
+            d_flux_bc->InsertNextValue(vp.flux_bc);
+        }        
         
-//         // Add properties to grid
-//         ugrid->GetCellData()->AddArray(d_bc_d);
-//         ugrid->GetCellData()->AddArray(d_flux);
-//     }
-// };
+        // Add properties to grid
+        ugrid->GetCellData()->AddArray(d_T_bc   );
+        ugrid->GetCellData()->AddArray(d_flux_bc);
+    }
+};
 
-// template <>
-// struct vtk_element_properties_adder<thermo_element> 
-// {    
-//     template <typename S> 
-//     void operator()(const S& s, vtk_sptr<vtkUnstructuredGrid> ugrid)
-//     {   
-//         // Init properties containers
-//         vtk_sptr<vtkDoubleArray> d_k(vtk_sptr<vtkDoubleArray>::New());
+template<typename BaseKind>
+struct vtk_element_properties_adder<thermo_element<BaseKind> > 
+{    
+    template <typename S> 
+    void operator()(const S& s, vtk_sptr<vtkUnstructuredGrid> ugrid)
+    {
+        // Add base kind stuff
+        using base_edge_t = typename BaseKind::element_type;
+        vtk_element_properties_adder<base_edge_t>()(s, ugrid);
         
-//         d_k->SetName("k [W/(m*K)]");
+        // Init properties containers
+        vtk_sptr<vtkDoubleArray> d_k(vtk_sptr<vtkDoubleArray>::New());
         
-//         for (const auto& e : make_iterator_range(edges(s)))
-//         {
-//             const auto& ep = s[e];
-//             d_k->InsertNextValue(ep.E);
-//         }
-//         // Add properties to grid
-//         ugrid->GetCellData()->AddArray(d_k);
-//     }
-// };
+        d_k->SetName("Thermal Conductivity [W/(m*K)]");
+        
+        for (const auto & e : make_iterator_range(edges(s)))
+        {
+            const auto & ep = s[e];
+            d_k->InsertNextValue(ep.k);
+        }
+        // Add properties to grid
+        ugrid->GetCellData()->AddArray(d_k);
+    }
+};
 
-// template <>
-// struct vtk_joint_properties_adder< result<thermo_kind> > 
-// {    
-//     template <typename S> 
-//     void operator()(const S& structure,
-//                     const std::vector< typename result_of<S>::type >& results,
-//                     vtk_sptr<vtkUnstructuredGrid> ugrid)
-//     {
-//         // Init results containers
-//         vtk_sptr<vtkDoubleArray>
-//             d_T(vtk_sptr<vtkDoubleArray>::New()),
-//             d_flux(vtk_sptr<vtkDoubleArray>::New());
+template<typename BaseKind>
+struct vtk_joint_properties_adder< result<thermo_kind<BaseKind> > > 
+{    
+    template <typename S> 
+    void operator()(const S& structure,
+                    const std::vector< typename result_of<S>::type >& results,
+                    vtk_sptr<vtkUnstructuredGrid> ugrid)
+    {
+        // Init results containers
+        vtk_sptr<vtkDoubleArray>
+            d_T   (vtk_sptr<vtkDoubleArray>::New()),
+            d_flux(vtk_sptr<vtkDoubleArray>::New());
 
-//         d_bc_d->SetName("Absolute Temperature [K]")
-//         d_flux->SetName("Heat Flux [W/(m*K)]");
+        d_T   ->SetName("Temperature [K]");
+        d_flux->SetName("Heat Flux [W/(m*K)]");
         
-//         for (const auto& v : boost::make_iterator_range(vertices(structure)))
-//         {
-//             const auto& rv = results[v];
-//             d_bc_d->InsertNextValue(rv.bc_d);
-//             d_flux->InsertNextValue(rv.flux);
-//         }        
+        for (const auto& v : boost::make_iterator_range(vertices(structure)))
+        {
+            const auto& rv = results[v];
+            d_T->InsertNextValue(rv.T);
+            d_flux->InsertNextValue(rv.flux);
+        }        
         
-//         // Add properties to grid
-//         ugrid->GetCellData()->AddArray(d_bc_d);
-//         ugrid->GetCellData()->AddArray(d_flux);
-//     }
-// };
+        // Add properties to grid
+        ugrid->GetCellData()->AddArray(d_T);
+        ugrid->GetCellData()->AddArray(d_flux);
+    }
+};
 #endif//__EVA_THERMO__
 
 } // end namespace eva

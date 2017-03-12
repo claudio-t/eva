@@ -1,28 +1,25 @@
 /// @file  core.tcc
 /// @brief Contains definitions of template functions and class methods
 ///        declared in file core.hpp .
-
+// #include <iostream>
 
 namespace eva {
 
 
 //######################################## Definitions #############################################      
 //-------------------------------------- Problem Solving -----------------------------------------//
-template <typename Params, typename Kind, typename S>
-auto
-solve(const S& s, Params p) 
+template <
+    typename Structure,
+    typename Kind   = typename kind_of<Structure>::type,
+    typename Params = dense_solver_params<typename Kind::default_dense_solver_t>
+    >
+auto solve(const Structure& s, const Kind, const Params) 
 {
-    // If Kind is void use Structure kind, else directly use Kind
-    using kind_t = typename std::conditional< 
-        std::is_void<Kind>::value, 
-        typename kind_of<S>::type, Kind
-        >::type;
-
-    auto r = solver<kind_t, Params>()(s);
+    auto r = solver<Kind, Params>()(s);
     const auto& uu = std::get<0>(r);
     const auto& ff = std::get<1>(r);
     
-    return assemble_results<kind_t>(uu, ff, s);
+    return assemble_results<Kind>(uu, ff, s);
     // return solver<kind_t, Params>()(s);
 }
 
@@ -55,23 +52,27 @@ struct solver
         //
         // $_f := Free DOF
         // $_b := BC   DOF
+
+        // Define kind type
+        using kind_t = StructureKind;
         
         // Build (global) DOF map with BCs related nodes located at the back
         auto dofmap = std::vector<index_t>();
         size_t n_f, n_b;
-        std::tie(dofmap, n_f, n_b) = build_global_dofmap(s);
+        std::tie(dofmap, n_f, n_b) = build_global_dofmap<kind_t>(s);
         
         // Assemble system stiffness matrices (in global coordinates)
         // NOTE: use .sparseView()?
-        auto matrices = assemble_system_submatrices<algebra_t>(s, dofmap, n_f, n_b);
-        const auto& K_ff = std::get<0>(matrices);
-        const auto& K_fb = std::get<1>(matrices);
-        const auto& K_bb = std::get<2>(matrices);
+        auto matrices = assemble_system_submatrices<algebra_t, S, kind_t>(s, dofmap, n_f, n_b);
+        const auto & K_ff = std::get<0>(matrices);
+        const auto & K_fb = std::get<1>(matrices);
+        const auto & K_bb = std::get<2>(matrices);
+        
         
         // Assemble known terms (in global coordinates)
-        auto known_terms = assemble_known_terms(s, n_f, n_b);
-        const dense_vector& f_f = std::get<0>(known_terms); // displacements on BC nodes
-        const dense_vector& u_b = std::get<1>(known_terms); // applied loads
+        auto known_terms = known_terms_assembler<kind_t>()(s, n_f, n_b);
+        const dense_vector & f_f = std::get<0>(known_terms); // displacements on BC nodes
+        const dense_vector & u_b = std::get<1>(known_terms); // applied loads
 
         // Solve condensed system:
         // K_ff * u_f = f_f - K_fb * u_b
@@ -82,12 +83,13 @@ struct solver
         // Compute reactions on BC DOF:
         // f_b = K_bf * u_f + K_bb * u_b
         dense_vector f_b = K_fb.transpose() * u_f + K_bb * u_b;
+ 
         
         // Asemble displacement and force vectors 
         // using the original DOF ordering
         dense_vector uu = merge_and_reorder(u_f, u_b, dofmap);
         dense_vector ff = merge_and_reorder(f_f, f_b, dofmap);
-
+        
         return std::make_pair(std::move(uu), std::move(ff));
         // return assemble_results<StructureKind>(uu, ff, s);
     }
@@ -95,12 +97,19 @@ struct solver
 
 
 //------------------------------------- Problem Assembling ---------------------------------------//
-template <typename A, typename S>
+template <typename A, typename S, typename Kind>
 auto
 assemble_system_submatrices(const S& s, const std::vector<index_t>& dofmap,
                           const size_t n_f, const size_t n_b) 
-{
-    return system_submatrices_assembler<A, typename kind_of<S>::type>()(s, dofmap, n_f, n_b);
+{ 
+    using kind_t = typename std::conditional<
+        std::is_same<Kind, void>::value,
+        typename kind_of<S>::type,
+        Kind
+        >::type;
+    
+    
+    return system_submatrices_assembler<A, kind_t>()(s, dofmap, n_f, n_b);
 }
 
 template <typename AlgebraKind, typename StructureKind>
@@ -120,12 +129,12 @@ struct system_submatrices_assembler
 };
 
 
-template <typename S>
-std::array<dense_vector, 2>
-assemble_known_terms(const S& s, const size_t n_f, const size_t n_b) 
-{
-    return known_terms_assembler<typename kind_of<S>::type>()(s, n_f, n_b);
-}
+// template <typename S, typename Kind>
+// std::array<dense_vector, 2>
+// assemble_known_terms(const S& s, const size_t n_f, const size_t n_b) 
+// {
+//     return known_terms_assembler<typename kind_of<S>::type>()(s, n_f, n_b);
+// }
 
 template <typename StructureKind>
 struct known_terms_assembler 
@@ -142,21 +151,27 @@ struct known_terms_assembler
 
  
 //---------------------------------------- DOF handling ------------------------------------------//
-template <typename S>
+template <typename Kind, typename S>
 std::tuple<std::vector<index_t>, size_t, size_t>
 build_global_dofmap(const S& s) 
 {
-    return global_dofmap_builder<kind_of<S>::type::ndof>()(s);
+    using kind_t = typename std::conditional<
+        std::is_same<Kind, void>::value,
+        typename kind_of<S>::type,
+        Kind
+        >::type;
+    
+    return global_dofmap_builder<kind_t, kind_t::ndof>()(s);
 }
 
-template <int D>
+template <typename Kind, size_t Dim>
 struct global_dofmap_builder
 {
     template <typename S>
     std::tuple<std::vector<index_t>, size_t, size_t>
     operator()(const S& s)
     {
-        constexpr size_t dim = kind_of<S>::type::ndof;
+        constexpr size_t dim = Kind::ndof;
     
         // Initialize the DOF map
         size_t n_verts = num_vertices(s);
@@ -191,8 +206,8 @@ struct global_dofmap_builder
     }
 };  
 
-template <>
-struct global_dofmap_builder<1>
+template <typename Kind>
+struct global_dofmap_builder<Kind, 1>
 {
     template <typename S>
     std::tuple<std::vector<index_t>, size_t, size_t>
@@ -208,9 +223,9 @@ struct global_dofmap_builder<1>
     
         for (size_t v = 0u; v < n_verts; ++v)
         {
-            const auto& bc_d = s[v].bc_d;
+            const auto & bc_d = s[v].T_bc;
         
-            // If T = NaN => Free DOF else BC DOF
+            // If T = NaN => Free DOF else Dirichlet BC DOF
             if (std::isnan(bc_d))
             {
                 // Put DOF at the beginning

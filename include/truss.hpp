@@ -51,24 +51,20 @@ struct system_submatrices_assembler<A, truss_kind<N> >;
 template <int N>
 struct known_terms_assembler< truss_kind<N> >;
 
-namespace sa
-{
-/// Specializes element_matrix_assembler functor for a 2D trusses
+/// Specializes element_matrix_assembler functor for 2D trusses
 template <>
 struct element_matrix_assembler< truss_kind<2> >;
 
-/// Specializes element_matrix_assembler functor for a 3D trusses
+/// Specializes element_matrix_assembler functor for 3D trusses
 template <>
 struct element_matrix_assembler< truss_kind<3> >;
-
-}//end namespace sa
 
 
 //------------------------------------- Results Assembling ---------------------------------------//
 template <int N>
 struct result< truss_kind<N> >;
 
-//------------------------------------- Results Assembling ---------------------------------------//
+
 template <int N>
 struct result< truss_kind<N> >
 {   
@@ -96,7 +92,14 @@ struct result< truss_kind<N> >
 template <int N> struct truss_kind 
 {     
     constexpr static int ndof = N; 
-    constexpr static int sdim = N; 
+    constexpr static int sdim = N;
+
+    using joint_type   = truss_joint<N>;
+    using element_type = truss_element<N>;
+    using result_type  = result< truss_kind<N> >;
+    
+    using default_dense_solver_t  = Eigen::LDLT<dense_matrix>;
+    using default_sparse_solver_t = Eigen::ConjugateGradient<sparse_matrix>;
 };
 
 
@@ -136,8 +139,10 @@ struct system_submatrices_assembler<A, truss_kind<N> >
     operator()(const S& s,
                const std::vector<index_t>& dofmap,
                const size_t n_f, const size_t n_b)
-    {
-        return sa::stiffness_submatrices_assembler<A>()(s, dofmap, n_f, n_b);
+    {   
+        return stiffness_submatrices_assembler<
+            truss_kind<N>, A
+            >()(s, dofmap, n_f, n_b);
     }    
 };
     
@@ -150,7 +155,7 @@ struct known_terms_assembler< truss_kind<N> >
     operator()(const S& s, const size_t n_f, const size_t n_b) 
     {
         // Aux vars
-        const static int ndof = kind_of<S>::type::ndof;   // #DOF per node (2D => 3, 3D => 6) 
+        const static int ndof = truss_kind<N>::ndof;   // #DOF per node (2D => 3, 3D => 6) 
 
         // Init return var
 # pragma clang diagnostic push
@@ -185,8 +190,6 @@ struct known_terms_assembler< truss_kind<N> >
     }
 };
 
-
-namespace sa {
 
 template <>
 struct element_matrix_assembler< truss_kind<2> > 
@@ -264,8 +267,6 @@ struct element_matrix_assembler< truss_kind<3> >
     }
 };
 
-}// end namespace sa
- 
 
 //-------------------------------------- Post-processing -----------------------------------------//
 // template <int N> 
