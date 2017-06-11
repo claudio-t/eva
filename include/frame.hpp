@@ -61,7 +61,9 @@ struct result< frame_kind<N> >;
 //------------------------------------- Results Assembling ---------------------------------------//
 template <int N>
 struct result< frame_kind<N> >
-{   
+{
+    using kind_type = frame_kind<N>;
+    
     constexpr static int ndof = frame_kind<N>::ndof;
     constexpr static int sdim = frame_kind<N>::sdim;
     constexpr static int rdim = frame_kind<N>::rdim;
@@ -108,29 +110,80 @@ template <int N> struct frame_kind
     
     using default_dense_solver_t  = Eigen::LDLT<dense_matrix>;
     using default_sparse_solver_t = Eigen::ConjugateGradient<sparse_matrix>;
+
+    friend class boost::serialization::access;
+    template<class Archive>
+    void serialize(Archive & ar, const unsigned int version)
+    {/* Do nothing with constexpr static stuff! */}
 };
+
+template <int N>
+std::ostream & operator<<(std::ostream & os, const frame_kind<N> & k)
+{
+    return os
+        << "ndof: " << k.ndof << "\n"
+        << "sdim: " << k.sdim << "\n"
+        << "rdim: " << k.rdim << "\n"
+        ;
+}
 
 
 template <int N> struct frame_joint 
 {
-    constexpr static int ndof = frame_kind<N>::ndof;
-    constexpr static int sdim = frame_kind<N>::sdim;
-    constexpr static int rdim = frame_kind<N>::rdim;
+
+    // fixed_vector<N>     coords; ///< Joint coordinates [m]
+    // fixed_vector<N>     load;   ///< Nodal load   [N]
+    // fixed_vector<2*N-3> torque; ///< Nodal torque [Nm]
+    // fixed_vector<3*N-3> bcs;    ///< Boundary conditions [[displ.s], [rot.s]]
     
-    fixed_vector<sdim> coords; ///< Joint coordinates [m]
-    fixed_vector<sdim> load;   ///< Nodal load [N]
-    fixed_vector<rdim> torque; ///< Nodal torque [Nm]
-    fixed_vector<ndof> bcs;    ///< Boundary conditions [[displ.s], [rot.s]]
+    // /// Default constructor. Initializes coords to zero,
+    // /// load to zero, torque to zero and bcs to nan
+    // frame_joint()
+    //     : coords(fixed_vector<N>::Zero()) 
+    //     , load  (fixed_vector<N>::Zero())
+    //     , torque(fixed_vector<2*N-3>::Zero())
+    //     , bcs   (fixed_vector<3*N-3>::Constant(std::numeric_limits<real>::quiet_NaN()))
+    //     {}   
+    
+    using k_ = frame_kind<N>;
+    // constexpr static int ndof = frame_kind<N>::ndof;
+    // constexpr static int sdim = frame_kind<N>::sdim;
+    // constexpr static int rdim = frame_kind<N>::rdim;
+    
+    fixed_vector<k_::sdim> coords; ///< Joint coordinates [m]
+    fixed_vector<k_::sdim> load;   ///< Nodal load   [N]
+    fixed_vector<k_::rdim> torque; ///< Nodal torque [Nm]
+    fixed_vector<k_::ndof> bcs;    ///< Boundary conditions [[displ.s], [rot.s]]
     
     /// Default constructor. Initializes coords to zero,
     /// load to zero, torque to zero and bcs to nan
     frame_joint()
-        : coords(fixed_vector<sdim>::Zero()) 
-        , load  (fixed_vector<sdim>::Zero())
-        , torque(fixed_vector<rdim>::Zero())
-        , bcs   (fixed_vector<ndof>::Constant(std::numeric_limits<real>::quiet_NaN()))
+        : coords(fixed_vector<k_::sdim>::Zero()) 
+        , load  (fixed_vector<k_::sdim>::Zero())
+        , torque(fixed_vector<k_::rdim>::Zero())
+        , bcs   (fixed_vector<k_::ndof>::Constant(std::numeric_limits<real>::quiet_NaN()))
         {}
+
+    friend class boost::serialization::access;
+    template<class Archive>
+    void serialize(Archive & ar, const unsigned int version)
+    {
+        // ar & ndof & sdim & rdim;
+        ar & coords & load & torque & bcs;
+    }
 };
+
+template <int N>
+std::ostream & operator<<(std::ostream & os, const frame_joint<N> & j)
+{
+    return os
+        << "coords: " << j.coords.transpose() << "\n"
+        << "  load: " <<   j.load.transpose() << "\n"
+        << "torque: " << j.torque.transpose() << "\n"
+        << "   bcs: " <<    j.bcs.transpose() << "\n"
+        ;
+}
+
 
 
 template <> struct frame_element<2> 
@@ -138,7 +191,23 @@ template <> struct frame_element<2>
     real E; ///< Young's modulus       [Pa]
     real A; ///< Cross sectional area  [m^2]
     real I; ///< Second moment of area [m^4]
+
+    friend class boost::serialization::access;
+    template<class Archive>
+    void serialize(Archive & ar, const unsigned int version)
+    {
+        ar & E & A & I;
+    }
 };
+
+inline std::ostream & operator<<(std::ostream & os, const frame_element<2> & e)
+{
+    return os
+        << "E: " << e.E << "\n"
+        << "A: " << e.A << "\n"
+        << "I: " << e.I << "\n"
+        ;
+}
 
 
 template <> struct frame_element<3> 
@@ -150,9 +219,27 @@ template <> struct frame_element<3>
     real Ix; ///< Second moment of area wrt (local) x-axis [m^4]
     real Iy; ///< Second moment of area wrt (local) y-axis [m^4]
     real Iz; ///< Second moment of area wrt (local) z-axis [m^4]
+
+    friend class boost::serialization::access;
+    template<class Archive>
+    void serialize(Archive & ar, const unsigned int version)
+    {
+        ar & E & A & G & Ix & Iy & Iz;
+    }
 };
 
 
+inline std::ostream & operator<<(std::ostream & os, const frame_element<3> & e)
+{
+    return os
+        << "E: " << e.E << "\n"
+        << "A: " << e.A << "\n"
+        << "G: " << e.G << "\n"
+        << "Ix: " << e.Ix << "\n"
+        << "Iy: " << e.Iy << "\n"
+        << "Iz: " << e.Iz << "\n"
+        ;
+}
 
 
 //-------------------------------------- Problem Assembling --------------------------------------//

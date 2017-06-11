@@ -85,31 +85,20 @@ void vtk_add_element_properties(const S& structure,
                                 vtk_sptr<vtkUnstructuredGrid> ugrid);
 
 
-/// Adds the results of the solved structure to the vtk
-/// unstructured grid object 
-template <typename S> 
-void add_results(
-    const S& structure,
-    const std::vector< typename result_of<S>::type >& results,
-    vtk_sptr<vtkUnstructuredGrid> ugrid);
-
-
-
 /// Adds the joint (node) properties and results of the structure to the vtk
 /// unstructured grid object
-template <typename S> 
-void vtk_add_joint_properties(
-    const S& structure,
-    const std::vector< typename result_of<S>::type >& results,
+// template <typename S, typename R> 
+// void vtk_add_joint_properties(
+//     const S& structure,
+//     const std::vector<R>& results,
+//     vtk_sptr<vtkUnstructuredGrid> ugrid);
+
+/// Adds results (i.e. computed nodal values) to the given unstructured grid
+template <typename R>
+void vtk_add_joint_results(
+    const std::vector<R> & results,
     vtk_sptr<vtkUnstructuredGrid> ugrid);
 
-/// Adds the joint (node) properties and results of the structure to the vtk
-/// unstructured grid object
-template <typename S> 
-void vtk_add_joint_properties(
-    const S& structure,
-    const std::vector< typename result_of<S>::type >& results,
-    vtk_sptr<vtkUnstructuredGrid> ugrid);
 
 
 /// Functor for adding joint properties to the vtk unstructured grid object
@@ -183,13 +172,11 @@ vtk_sptr<vtkUnstructuredGrid> to_vtk_unstructured_grid(
     auto ugrid = to_vtk_unstructured_grid(structure);
     
     // Add joint (node) results
-    vtk_add_joint_properties(structure, results, ugrid);
-
-    // Add element (edge) properties
-    vtk_add_element_properties(structure, ugrid);
+    vtk_add_joint_results(results, ugrid);
     
     return ugrid;
 }
+
 
 template <typename S>
 vtk_sptr<vtkUnstructuredGrid> to_vtk_unstructured_grid(const S& structure)
@@ -267,6 +254,8 @@ write_vtu(const S& structure,
           const std::string& filename)
 {
     auto ugrid = to_vtk_unstructured_grid(structure, results);
+    // auto ugrid = to_to_vtk_unstructured_grid(structure);
+    
     write_vtu(ugrid, filename);
 }
 
@@ -279,7 +268,7 @@ write_vtu(const S& structure, const std::string& filename)
 }
 
 
-// ---------- Write VTP ---------- //
+// ---------- Write 3D ---------- //
 
 template<typename S>
 void
@@ -314,41 +303,52 @@ void vtk_add_element_properties(const S& structure, vtk_sptr<vtkUnstructuredGrid
     vtk_element_properties_adder<typename element_of<S>::type>()(structure, ugrid);
 }
 
-template <typename S> 
-void vtk_add_joint_properties(
-    const S& structure,
-    const std::vector< typename result_of<S>::type >& results,
-    vtk_sptr<vtkUnstructuredGrid> ugrid)
-{
-    vtk_joint_properties_adder<typename joint_of<S>::type>()(structure, ugrid);
-    vtk_joint_properties_adder<typename result_of<S>::type>()(structure, results, ugrid);
-}
+// template <typename S, typename R> 
+// void vtk_add_joint_properties(
+//     const S & structure,
+//     const std::vector< typename result_of<S>::type >& results,
+//     vtk_sptr<vtkUnstructuredGrid> ugrid)
+// {
+//     vtk_joint_properties_adder<typename joint_of<S>::type>()(structure, ugrid);
+//     // vtk_joint_properties_adder<typename result_of<S>::type>()(structure, results, ugrid);
+// }
 
-template <typename S> 
-void vtk_add_element_properties(
-    const S& structure,
-    const std::vector< typename result_of<S>::type >& results,
-    vtk_sptr<vtkUnstructuredGrid> ugrid)
-{
-    vtk_element_properties_adder<typename element_of<S>::type>()(structure, ugrid);
-    // vtk_element_properties_adder<typename result_of<S>::type>()(structure, results, ugrid);
-}
+// template <typename S> 
+// void vtk_add_element_properties(
+//     const S& structure,
+//     const std::vector< typename result_of<S>::type >& results,
+//     vtk_sptr<vtkUnstructuredGrid> ugrid)
+// {
+//     vtk_element_properties_adder<typename element_of<S>::type>()(structure, ugrid);
+//     // vtk_element_properties_adder<typename result_of<S>::type>()(structure, results, ugrid);
+// }
 
-template <typename S> 
-void add_joint(
-    const S& structure,
-    const std::vector< typename result_of<S>::type >& results,
-    vtk_sptr<vtkUnstructuredGrid> ugrid)
-{
-    // Add data
-    using vertex_t = typename joint_of<S>::type;
-    vtk_joint_properties_adder<vertex_t>()(structure, ugrid);
+// template <typename S> 
+// void add_joint_properties(
+//     const S& structure,
+//     const std::vector< typename result_of<S>::type >& results,
+//     vtk_sptr<vtkUnstructuredGrid> ugrid)
+// {
+//     // Add data
+//     using vertex_t = typename joint_of<S>::type;
+//     vtk_joint_properties_adder<vertex_t>()(structure, ugrid);
 
-    //Add results
-    using result_t = result<typename kind_of<S>::type>;
-    vtk_joint_properties_adder<result_t>()(structure, results, ugrid);
+//     //Add results
+//     using result_t = result<typename kind_of<S>::type>;
+//     vtk_joint_properties_adder<result_t>()(structure, results, ugrid);
     
+// }
+
+
+template <typename R>
+void vtk_add_joint_results(
+    const std::vector<R>& results,
+    vtk_sptr<vtkUnstructuredGrid> ugrid)
+{
+    using vertex_t = R;
+    vtk_joint_properties_adder<vertex_t>()(results, ugrid);
 }
+
 
 #ifdef __EVA_TRUSS__
 
@@ -404,10 +404,12 @@ struct vtk_element_properties_adder< truss_element<N> >
 
 template <int N>
 struct vtk_joint_properties_adder< result< truss_kind<N> > > 
-{    
-    template <typename S> 
-    void operator()(const S& structure,
-                    const std::vector< typename result_of<S>::type >& results,
+{
+    using kind_type = truss_kind<N>;
+    
+    template <typename R> 
+    void operator()(//const S& structure,
+                    const std::vector<R>& results,
                     vtk_sptr<vtkUnstructuredGrid> ugrid)
     {        
         // Init results containers
@@ -418,12 +420,14 @@ struct vtk_joint_properties_adder< result< truss_kind<N> > >
         // Setup names and content dim
         d_displ->SetName("Displacements [m]");
         d_react->SetName("Reactions [N]");
-        d_displ->SetNumberOfComponents(kind_of<S>::type::sdim);
-        d_react->SetNumberOfComponents(kind_of<S>::type::sdim);
+        d_displ->SetNumberOfComponents(kind_type::sdim);
+        d_react->SetNumberOfComponents(kind_type::sdim);
         
-        for (const auto& v : boost::make_iterator_range(vertices(structure)))
+        // for (const auto& v :
+        // boost::make_iterator_range(vertices(structure)))
+        for (const auto & vr : results)
         {
-            const auto& vr = results[v];
+            // const auto& vr = results[v];
             d_displ->InsertNextTupleValue(vr.displacement.data());
             d_react->InsertNextTupleValue(vr.reaction.data());
         }
@@ -484,10 +488,12 @@ struct vtk_element_properties_adder< frame_element<2> >
 
 template <>
 struct vtk_joint_properties_adder< result< frame_kind<2> > > 
-{    
-    template <typename S> 
-    void operator()(const S& structure,
-                    const std::vector< typename result_of<S>::type >& results,
+{
+    using kind_type = frame_kind<2>;
+    
+    template <typename R> 
+    void operator()(//const S& structure,
+                    const std::vector<R>& results,
                     vtk_sptr<vtkUnstructuredGrid> ugrid)
     {
         // Init results containers
@@ -498,17 +504,19 @@ struct vtk_joint_properties_adder< result< frame_kind<2> > >
         // Setup names and content dim
         d_rotation->SetName("Rotations [m]");        
         d_torque  ->SetName("Reaction Torques [Nm]");
-        d_rotation->SetNumberOfComponents(kind_of<S>::type::rdim);
-        d_torque  ->SetNumberOfComponents(kind_of<S>::type::rdim);
+        d_rotation->SetNumberOfComponents(kind_type::rdim);
+        d_torque  ->SetNumberOfComponents(kind_type::rdim);
         
-        for (const auto& v : boost::make_iterator_range(vertices(structure)))
-        {
-            const auto& vr = results[v];
+        // for (const auto& v :
+        // boost::make_iterator_range(vertices(structure)))
+        for (const auto & vr : results)
+        { 
+            // const auto& vr = results[v];
             d_rotation->InsertNextTupleValue(vr.rotation.data());
             d_torque  ->InsertNextTupleValue(vr.react_torque.data());
         }
         // Add results to the grid
-        vtk_joint_properties_adder< result< truss_kind<2> > >()(structure, results, ugrid);
+        vtk_joint_properties_adder< result< truss_kind<2> > >()(results, ugrid);
         ugrid->GetPointData()->AddArray(d_torque);
     }
 };
@@ -575,12 +583,18 @@ struct vtk_element_properties_adder<thermo_element<BaseKind> >
 
 template<typename BaseKind>
 struct vtk_joint_properties_adder< result<thermo_kind<BaseKind> > > 
-{    
-    template <typename S> 
-    void operator()(const S& structure,
-                    const std::vector< typename result_of<S>::type >& results,
+{
+    // using kind_type = thermo_kind<BaseKind>;
+    
+    template <typename R> 
+    void operator()(//const S& structure,
+                    const std::vector<R>& results,
                     vtk_sptr<vtkUnstructuredGrid> ugrid)
     {
+        // // Add base kind stuff
+        // using base_result_t = typename BaseKind::result_type;
+        // vtk_joint_properties_adder<base_result_t>()(result, ugrid);
+        
         // Init results containers
         vtk_sptr<vtkDoubleArray>
             d_T   (vtk_sptr<vtkDoubleArray>::New()),
@@ -589,9 +603,11 @@ struct vtk_joint_properties_adder< result<thermo_kind<BaseKind> > >
         d_T   ->SetName("Temperature [K]");
         d_flux->SetName("Heat Flux [W/(m*K)]");
         
-        for (const auto& v : boost::make_iterator_range(vertices(structure)))
+        // for (const auto& v :
+        // boost::make_iterator_range(vertices(structure)))
+        for (const auto & rv : results)
         {
-            const auto& rv = results[v];
+            // const auto& rv = results[v];
             d_T->InsertNextValue(rv.T);
             d_flux->InsertNextValue(rv.flux);
         }        

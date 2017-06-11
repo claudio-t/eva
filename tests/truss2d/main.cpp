@@ -19,7 +19,7 @@ int main(int argc, char * argv [])
     auto structure = eva::read_from_graphviz<eva::truss2d>(filename);
 
     // Solve structure
-    auto results = solve(structure, eva::sparse_solver_params<>());
+    auto results = solve(structure);
     
     for (auto idx = 0u; idx < num_vertices(structure); ++idx)
     {
@@ -60,10 +60,11 @@ int main(int argc, char * argv [])
     // std::cout << compliance << std::endl;
     
     // Display undeformed structure
-    display(structure);
+    display(structure, results);
     
     // Save to vtu for paraview
     write_vtu(structure, results, "test.vtu");
+    // write_3d(structure, results, "test.vtu");
     
     return 0;
 }

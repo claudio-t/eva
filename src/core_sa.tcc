@@ -341,6 +341,26 @@ real compute_compliance(
     return compliance;
 }
 
+
+template <typename Structure>
+real compute_mass(const Structure & s, const real rho)
+{
+    real mass = 0.0;
+
+    for(auto e : boost::make_iterator_range(edges(s)))
+    {
+        // Compute element length
+        auto src = source(e, s);
+        auto trg = target(e, s);
+        real l = (s[src].coords - s[trg].coords).norm();
+
+        // Compute element mass & add it
+        mass += rho * l * s[e].A;
+    }
+    return mass;
+}
+
+
 } //end namespace eva
 
 

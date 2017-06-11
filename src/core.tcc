@@ -67,7 +67,8 @@ struct solver
         const auto & K_ff = std::get<0>(matrices);
         const auto & K_fb = std::get<1>(matrices);
         const auto & K_bb = std::get<2>(matrices);
-        
+
+        // std::cout << "Matrix size: " << K_ff.rows() << " x " << K_ff.cols() << std::endl;
         
         // Assemble known terms (in global coordinates)
         auto known_terms = known_terms_assembler<kind_t>()(s, n_f, n_b);

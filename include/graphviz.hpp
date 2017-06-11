@@ -7,6 +7,9 @@
  * format (.dot files)
  */
 
+// self
+# include "core.hpp"
+
 // std
 # include <string>
 # include <fstream>
@@ -78,7 +81,13 @@ struct properties_selector< thermo_element<BaseKind> >;
 
 //------------------------------------------ Write -----------------------------------------------//
 template <typename S>
+auto write_graphviz(const S& structure, const std::string & filename);
+
+template <typename S>
 auto make_joint_properties_writer(const S& structure);
+
+template <typename S>
+auto make_element_properties_writer(const S& structure);
 
 
 template <typename S>
@@ -101,6 +110,10 @@ class properties_writer;
 /// Specialization for writing a truss joint
 template <typename S, int N>
 class properties_writer< S, truss_joint<N> >;
+
+/// Specialization for writing a truss joint
+template <typename S, int N>
+class properties_writer< S, truss_element<N> >;
 #endif//__EVA_TRUSS__
 
 
@@ -108,7 +121,19 @@ class properties_writer< S, truss_joint<N> >;
 /// Specialization for writing a 2D frame joint
 template <typename S>
 class properties_writer< S, frame_joint<2> >;
+
+/// Specialization for writing a truss joint
+template <typename S, int N>
+class properties_writer< S, truss_element<N> >;
 #endif//__EVA_FRAME__
+
+#ifdef __EVA_THERMO__
+
+template <typename S, typename BaseKind>
+class properties_writer< S, thermo_joint<BaseKind> >;
+
+
+#endif//__EVA_THERMO__
 
 
 //####################################### DEFINITIONS ##############################################
@@ -268,10 +293,28 @@ struct properties_selector< thermo_element<BaseKind> >
 
 //------------------------------------------ Write -----------------------------------------------//
 template <typename S>
+auto write_graphviz(const S& structure, const std::string & filename)
+{
+    std::ofstream ofs(filename);
+    
+    boost::write_graphviz(
+        ofs, structure,
+        make_joint_properties_writer(structure),
+        make_element_properties_writer(structure));
+}
+
+template <typename S>
 auto
 make_joint_properties_writer(const S& s)
 {
     return properties_writer<S, typename joint_of<S>::type>(s);
+}
+
+template <typename S>
+auto
+make_element_properties_writer(const S& s)
+{
+    return properties_writer<S, typename element_of<S>::type>(s);
 }
 
 #ifdef __EVA_TRUSS__
@@ -279,32 +322,29 @@ template <typename S, int N>
 class properties_writer< S, truss_joint<N> >
 {
 public:
-    using props = typename joint_of<S>::type;
-
-    template <typename P>
-    using property_map_t = boost::vec_adj_list_vertex_property_map<
-        S, const S *,
-        P, const P&,
-        P eva::truss_joint<N>::*
-        >;
+    // using props_t = typename joint_of<S>::type;
+    // template <typename P>
+    // using property_map_t = boost::vec_adj_list_vertex_property_map<
+    //     S, const S *,
+    //     P, const P &,
+    //     P eva::joint_of<S>::type::*
+    //     // P eva::truss_joint<N>::*
+    //     >;
 
     /// Constructor that initializes member data
-    properties_writer(const S& structure)
-        : coords_list_(get(&props::coords, structure))
-        , loads_list_ (get(&props::load,   structure))
-        , bcs_list_   (get(&props::bcs,    structure))
-        {}
+    properties_writer(const S & structure)
+        : structure_(structure){}
 
     template <class Vertex>
-    void write_impl(std::ostream& os, const Vertex& v) const
+    void write_impl(std::ostream & os, const Vertex & v) const
     {
-        os << "coords = \"" << to_string(coords_list_[v]) << "\", " 
-           << "load = \""   << to_string(loads_list_[v])  << "\", "
-           << "bcs = \""    << to_string(bcs_list_[v])    << "\", ";
+        os << "coords = \"" << to_string(structure_[v].coords) << "\", " 
+           << "load = \""   << to_string(structure_[v].load)   << "\", "
+           << "bcs = \""    << to_string(structure_[v].bcs)    << "\"";
     }
     
     template <class Vertex>
-    void operator()(std::ostream& os, const Vertex& v) const
+    void operator()(std::ostream & os, const Vertex & v) const
     {
         os << '[';
         write_impl(os, v);
@@ -312,9 +352,35 @@ public:
     }
     
 protected:
-    const property_map_t< fixed_vector<N> > coords_list_;
-    const property_map_t< fixed_vector<N> >  loads_list_;
-    const property_map_t< fixed_vector<N> >    bcs_list_;
+    const S & structure_;
+};
+
+template <typename S, int N>
+class properties_writer< S, truss_element<N> >
+{
+public:
+    /// Constructor that initializes member data
+    properties_writer(const S & structure)
+        : structure_(structure){}
+
+    template <class Edge>
+    void write_impl(std::ostream & os, const Edge & e) const
+    {
+        os << "A = \"" << structure_[e].A << "\", " 
+           << "E = \"" << structure_[e].E << "\"";
+        
+    }
+    
+    template <class Edge>
+    void operator()(std::ostream & os, const Edge & e) const
+    {
+        os << '[';
+        write_impl(os, e);
+        os << ']';
+    }
+    
+protected:
+    const S & structure_;
 };
 #endif//__EVA_TRUSS__
 
@@ -322,39 +388,92 @@ protected:
 #ifdef __EVA_FRAME__
 template <typename S>
 class properties_writer< S, frame_joint<2> >
-    // : public properties_writer< S, truss_joint<2> >
+    : public properties_writer< S, truss_joint<2> >
 {
 public:
-    using props = typename joint_of<S>::type;
-    // using base_t = properties_writer< S, truss_joint<2> >;
+    using props_t = typename joint_of<S>::type;
+    using base_t  = properties_writer< S, truss_joint<2> >;
 
-    template <typename P>
-    using property_map_t = boost::vec_adj_list_vertex_property_map<
-        S, const S *,
-        P, const P&,
-        P eva::frame_joint<2>::*
-        >;
+    using base_t::structure_;
 
     /// Constructor that initializes member data
-    properties_writer(const S& structure)
-        // : base_t(structure),
-        : coords_list_ (get(&props::coords, structure)),
-          loads_list_  (get(&props::load,   structure)),
-          bcs_list_    (get(&props::bcs,    structure)),
-          torques_list_(get(&props::torque, structure))
-        {}
+    properties_writer(const S & structure)
+        : base_t(structure) {}
 
     /// Actual functor implementation
     template <class Vertex>
-    void write_impl(std::ostream& os, const Vertex& v) const
+    void write_impl(std::ostream & os, const Vertex & v) const
     {
-        os << "coords = \"" << to_string(coords_list_[v]) << "\", " 
-           << "load = \""   << to_string(loads_list_[v])  << "\", "
-           << "bcs = \""    << to_string(bcs_list_[v])    << "\",";
-        // base_t::write_impl(os, v);
-        os << "torque = \"" << torques_list_[v] << "\"";
-        
-        // return os;
+        base_t::write_impl(os, v);
+        os << ", " << "torque = \"" << structure_[v].torque << "\"";
+    }
+
+    template <class Vertex>
+    void operator()(std::ostream & os, const Vertex & v) const
+    {
+        os << '[';
+        write_impl(os, v);
+        os << ']';
+    }
+    
+protected:
+};
+
+template <typename S>
+class properties_writer< S, frame_element<2> >
+    : public properties_writer< S, truss_element<2> >
+{
+public:
+    using props_t = typename joint_of<S>::type;
+    using base_t  = properties_writer< S, truss_element<2> >;
+
+    using base_t::structure_;
+
+    /// Constructor that initializes member data
+    properties_writer(const S & structure)
+        : base_t(structure) {}
+
+    /// Actual functor implementation
+    template <class Edge>
+    void write_impl(std::ostream & os, const Edge & e) const
+    {
+        base_t::write_impl(os, e);
+        os << ", " << "I = \"" << structure_[e].I << "\"";
+    }
+
+    template <class Edge>
+    void operator()(std::ostream & os, const Edge & e) const
+    {
+        os << '[';
+        write_impl(os, e);
+        os << ']';
+    }
+    
+protected:
+};
+#endif//__EVA_FRAME__
+
+
+#ifdef __EVA_THERMO__
+template <typename S, typename BaseKind>
+class properties_writer< S, thermo_joint<BaseKind> >
+    : public properties_writer< S, typename thermo_joint<BaseKind>::base_type >
+{
+public:
+    using base_t  = properties_writer< S, typename thermo_joint<BaseKind>::base_type >;
+    using base_t::structure_;
+
+    /// Constructor that initializes member data
+    properties_writer(const S & structure)
+        : base_t(structure) {}
+
+    /// Actual functor implementation
+    template <class Vertex>
+    void write_impl(std::ostream & os, const Vertex & v) const
+    {
+        base_t::write_impl(os, v);
+        os << ", " << "T_bc = \"" << structure_[v].   T_bc << "\", "
+           << "flux_bc = \"" << structure_[v].flux_bc << "\"";
     }
 
     template <class Vertex>
@@ -366,15 +485,42 @@ public:
     }
     
 protected:
-    const property_map_t< fixed_vector<2> >  coords_list_;
-    const property_map_t< fixed_vector<2> >   loads_list_;
-    const property_map_t< fixed_vector<3> >     bcs_list_;
-    const property_map_t< fixed_vector<1> > torques_list_;
-    
 };
-#endif//__EVA_FRAME__
 
-//------------------------------------------ Write -----------------------------------------------//
+
+template <typename S, typename BaseKind>
+class properties_writer< S, thermo_element<BaseKind> >
+    : public properties_writer< S, typename thermo_element<BaseKind>::base_type >
+{
+public:
+    using base_t  = properties_writer< S, typename thermo_element<BaseKind>::base_type >;
+    using base_t::structure_;
+
+    /// Constructor that initializes member data
+    properties_writer(const S & structure)
+        : base_t(structure) {}
+
+    /// Actual functor implementation
+    template <class Edge>
+    void write_impl(std::ostream & os, const Edge & e) const
+    {
+        base_t::write_impl(os, e);
+        os << ", " << "k = \"" << structure_[e].k << "\"";
+    }
+
+    template <class Edge>
+    void operator()(std::ostream & os, const Edge & e) const
+    {
+        os << '[';
+        write_impl(os, e);
+        os << ']';
+    }
+    
+protected:
+};
+#endif//__EVA_THERMO__
+
+//------------------------------------------ Helpers -----------------------------------------------//
 
 template <int N>
 std::string

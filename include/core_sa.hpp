@@ -45,8 +45,14 @@ count_nnz_entries(const S& s, const std::vector<index_t>& dofmap,
 
 //------------------------------------- Post-processing -----------------------------------------//
 
+template <typename Structure, typename Result>
+real compute_compliance(
+    const Structure & s,
+    const std::vector<Result> & results);
+
 template <typename Structure>
-real compute_compliance(const Structure & s);
+real compute_mass(const Structure & s, const real rho);
+
 
 
 // // Get member internal forces

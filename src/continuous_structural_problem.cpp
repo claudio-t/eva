@@ -18,7 +18,7 @@ continuous_structural_problem::continuous_structural_problem(
     : base(int(dim), // Global dimension
            int(0),   // Integer dimension
            int(1),   // Fitness dimension
-           int(3),   // Global constraints dimension
+           int(1),   // Global constraints dimension: volume constraint
            int(1),   // Inequality constraints dimension
            0.)       // Constraints tolerance
     , joints_    (joints)

@@ -10,10 +10,14 @@ set(SRC_DIR ${EVA_MAIN_DIR}/src)
 ## Select clang as c++ compiler ##
 set(CMAKE_CXX_COMPILER "/usr/bin/clang++") 
 
+## Force boost find module to use in usr/local/include-lib ##
+set(BOOST_ROOT "/usr/local")
+set(Boost_NO_SYSTEM_PATHS ON)
+
 ## Find required packages ##
 find_package(VTK  REQUIRED)
 find_package(Qt5 COMPONENTS Widgets REQUIRED)
-find_package(Boost COMPONENTS graph thread serialization system REQUIRED)
+find_package(Boost COMPONENTS graph thread serialization system program_options REQUIRED)
 
 ## Setup libraries ##
 # set(EVA_LINK_LIBS
@@ -28,10 +32,10 @@ include(${VTK_USE_FILE})
 include_directories("include")
 
 ## Specify target bin and source files ##
-set(SOURCES ${SRC_DIR}/vtk.cpp)
+set(SOURCES ${SRC_DIR}/vtk.cpp ${SRC_DIR}/utils.cpp)
 
 ## Specify subfolders ##
 add_subdirectory("tests")
-#add_subdirectory("pagmo")
+add_subdirectory("pagmo")
 
 

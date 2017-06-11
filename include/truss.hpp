@@ -67,7 +67,9 @@ struct result< truss_kind<N> >;
 
 template <int N>
 struct result< truss_kind<N> >
-{   
+{
+    using kind_type = truss_kind<N>;
+    
     constexpr static int ndof = truss_kind<N>::ndof;
     constexpr static int sdim = truss_kind<N>::sdim;
     
@@ -100,6 +102,11 @@ template <int N> struct truss_kind
     
     using default_dense_solver_t  = Eigen::LDLT<dense_matrix>;
     using default_sparse_solver_t = Eigen::ConjugateGradient<sparse_matrix>;
+
+    friend class boost::serialization::access;
+    template<class Archive>
+    void serialize(Archive & ar, const unsigned int version)
+    {/* Do nothing! */}    
 };
 
 
@@ -116,6 +123,13 @@ template <int N> struct truss_joint
         , load  (fixed_vector<N>::Zero())
         , bcs   (fixed_vector<N>::Constant(std::numeric_limits<real>::quiet_NaN()))
         {}
+
+    friend class boost::serialization::access;
+    template<class Archive>
+    void serialize(Archive & ar, const unsigned int version)
+    {
+        ar & coords & load & bcs;
+    }        
 };
 
 
@@ -124,6 +138,13 @@ template <int N> struct truss_element
     real E; ///< Young's modulus      [GPa]
     
     real A; ///< Cross sectional area [m^2]
+
+    friend class boost::serialization::access;
+    template<class Archive>
+    void serialize(Archive & ar, const unsigned int version)
+    {
+        ar & E & A;
+    }
 };
 
 

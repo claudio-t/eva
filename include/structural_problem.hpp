@@ -24,7 +24,7 @@
 # define UNFEASIBLE_SCENARIO_FITNESS std::numeric_limits<double>::infinity()
 # endif
 
-namespace eva { namespace pagmo {
+namespace eva {
 
 /// Base class for a structural optimization problem.
 /// Functions that have to be reimplemented are:
@@ -41,7 +41,7 @@ public:
     using structure_t = eva::frame2d;
     using joint_t     = typename eva::joint_of  <structure_t>::type;
     using element_t   = typename eva::element_of<structure_t>::type;
-    using gene_mask_t = std::vector< std::vector<size_t> >;
+    // using gene_mask_t = std::vector< std::vector<size_t> >;
     
     /// Constructor that initializes class members
     structural_problem(
@@ -109,6 +109,6 @@ private:
     std::vector<eva::index_t> mandatory_joints_;
 };
 
-}} // namespaces
+} // namespaces
 
 # endif // __PAGMO_STRUCTURAL_PROBLEM__

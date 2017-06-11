@@ -19,7 +19,7 @@ int main(int argc, char * argv [])
     auto structure = eva::read_from_graphviz<eva::frame2d>(filename);
 
     // Solve structure
-    auto results = solve(structure, eva::sparse_solver_params<>());
+    auto results = solve(structure);//, eva::sparse_solver_params<>());
     
     for (auto idx = 0u; idx < num_vertices(structure); ++idx)
     {
@@ -72,7 +72,21 @@ int main(int argc, char * argv [])
     display(structure);
     
     // Save to vtu for paraview
+    // auto ugrid = eva::to_vtk_unstructured_grid(structure);
+    // eva::vtk_add_joint_results(results, ugrid);
+    // eva::write_vtu(ugrid, "test2.vtu");
+    
     // write_vtu(structure, results, "test.vtu");
+    // Setup properties to be read
+    // auto dyna_props = boost::dynamic_properties(boost::ignore_other_properties);
+    
+    // setup_joint_properties  (structure, dyna_props);
+    // setup_element_properties(structure, dyna_props);
+
+    // // Write out the graph
+    // boost::write_graphviz_dp(std::cout, structure, dyna_props, std::string("id"));
+
+    eva::write_graphviz(structure, "test.dot");
     
     return 0;
 }

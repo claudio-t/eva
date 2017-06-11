@@ -6,8 +6,8 @@
  */
 // eva
 # include "core.hpp"
-#include <iostream>
-#include <iomanip>
+// #include <iostream>
+// #include <iomanip>
 
 namespace eva {
 
@@ -71,6 +71,11 @@ struct thermo_kind : public BaseKind
     
     using default_dense_solver_t  = Eigen::PartialPivLU<dense_matrix>;
     using default_sparse_solver_t = Eigen::BiCGSTAB<sparse_matrix>;
+
+    friend class boost::serialization::access;
+    template<class Archive>
+    void serialize(Archive & ar, const unsigned int version)
+    {/* Do nothing! */}
 };
 
 
@@ -89,15 +94,34 @@ struct thermo_joint : public BaseKind::joint_type
         // coords(fixed_vector<N>::Zero()),
         T_bc(std::numeric_limits<real>::quiet_NaN()),
         flux_bc(0) {}
-          
+    
+    friend class boost::serialization::access;
+    template<class Archive>
+    void serialize(Archive & ar, const unsigned int version)
+    {
+        // serialize base class information
+        ar & boost::serialization::base_object<base_type>(*this);
+        ar & T_bc & flux_bc;
+    }          
 };
 
 template <typename BaseKind>
 struct thermo_element : public BaseKind::element_type
 {
     using base_type = typename BaseKind::element_type;
+    
     real k; ///< Thermal conductivity [W/(m*K)]
+
+    friend class boost::serialization::access;
+    template<class Archive>
+    void serialize(Archive & ar, const unsigned int version)
+    {
+        // serialize base class information
+        ar & boost::serialization::base_object<base_type>(*this);
+        ar & k;
+    }
 };
+    
 
 
 //------------------------------------- Problem Assembling ---------------------------------------//
@@ -130,7 +154,7 @@ struct system_submatrices_assembler< dense_algebra_t, thermo_kind<BaseKind> >
 
             if (src_m < n_f)
             {
-                // Update Diagonal
+                // Update diagonal
                 K_ff(src_m, src_m) += 1/R;
 
                 // Update extra-diagonal
@@ -143,16 +167,14 @@ struct system_submatrices_assembler< dense_algebra_t, thermo_kind<BaseKind> >
             else
             {
                 K_bb(src_m - n_f, src_m - n_f) = 1/R;
-                
-                // if (trg_m >= n_f)
-                    // K_fb(src_m - n_f, trg_m - n_f) -= 1/R;
-                // Do nothing on K_bf
             }
             
             if (trg_m < n_f)
             {
+                // Update diagonal
                 K_ff(trg_m, trg_m) += 1/R;
 
+                // Update extra-diagonal
                 if (src_m < n_f)
                     K_ff(trg_m, src_m) -= 1/R;
                 else
@@ -161,75 +183,21 @@ struct system_submatrices_assembler< dense_algebra_t, thermo_kind<BaseKind> >
             else
             {
                 K_bb(trg_m - n_f, trg_m - n_f) = 1/R;
-                
-                // if (src_m < n_f)
-                //     K_fb(trg_m - n_f, src_m) += 1/R;
             }    
-        }
+        }        
+        // std::cout << "DOFS:\n"
+        //           << "n_f = " << n_f << "\n"
+        //           << "n_b = " << n_b << "\n";
+
+        // std::cout << "Map = ";
+        // for (const auto & el : dofmap) std::cout << el << " ";
+        // std::cout << "\n\n";
         
-
-        // // Loop over all vertices
-        // for (auto&& v : boost::make_iterator_range(vertices(s)))
-        // {
-        //     // Get current vertex mapped value
-        //     auto vv = dofmap[v];
-
-        //     // Init diagonal value
-        //     auto dval = real(0);
-            
-        //     // For each of the adjacent nodes
-        //     for (auto&& av : make_iterator_range(adjacent_vertices(v, s)))
-        //     {
-        //         // Compute element length
-        //         real l = (s[av].coords - s[v].coords).norm();
-
-        //         // Compute element thermal resistance
-        //         const auto el = edge(v, av, s).first;
-        //         real R = l / (s[el].A * s[el].k);
-
-        //         // Get adj vertex mapped value
-        //         auto avv = dofmap[av];
-
-        //         // Assign value: if edge (v, av) is first encountered
-        //         // flux is outflow (negative), otherwise is inflow
-        //         // (positive).
-        //         // Edge is first encountered if v < av or if av has
-        //         // dirichlet conditions.
-        //         bool outflow = (v < av) || (avv >= n_f);
-        //         switch((vv < n_f) + 2*(avv < n_f))
-        //         {
-        //             case 0 : K_bb(vv-n_f, avv-n_f) = (outflow ? -1/R : 1/R); break;
-                        
-        //             case 1 : K_fb(vv, avv-n_f)     = (outflow ? -1/R : 1/R); break;
-                        
-        //             case 2 : /* Does nothing (no K_bf) */ break;
-                        
-        //             case 3 : K_ff(vv, avv)         = (outflow ? -1/R : 1/R); break;
-        //         }                
-
-        //         // Update diagonal value
-        //         dval += 1. / (outflow ? R : -R);//(v < av ? 1. : -1.) * 1/R;            
-        //     }
-
-        //     // Assign diagonal value
-        //     if (vv < n_f)  K_ff(vv, vv)         = dval;
-        //     else           K_bb(vv-n_f, vv-n_f) = dval;
-            
-        // }
-        std::cout << "DOFS:\n"
-                  << "n_f = " << n_f << "\n"
-                  << "n_b = " << n_b << "\n";
-
-        std::cout << "Map = ";
-        for (const auto & el : dofmap) std::cout << el << " ";
-        std::cout << "\n\n";
+        // std::cout << std::setprecision(16);
         
-        std::cout << std::setprecision(16);
-        
-        std::cout << "K_ff:\n" << K_ff << "\n\n"
-                  << "K_fb:\n" << K_fb << "\n\n"
-                  << "K_bb:\n" << K_bb << "\n\n";
-        
+        // std::cout << "K_ff:\n" << K_ff << "\n\n"
+        //           << "K_fb:\n" << K_fb << "\n\n"
+        //           << "K_bb:\n" << K_bb << "\n\n";
             
 # pragma clang diagnostic push
 # pragma clang diagnostic ignored "-Wmissing-braces"
@@ -305,6 +273,8 @@ struct known_terms_assembler< thermo_kind<BaseKind> >
 template <typename BaseKind>
 struct result< thermo_kind<BaseKind> > 
 {
+    using kind_type = thermo_kind<BaseKind>;
+    
     real T;    ///< Temperature
     real flux; ///< Thermal flux
 
@@ -342,6 +312,20 @@ real compute_heat_flow(
 
     // Compute flux
     return (T_src - T_trg) / R;
+}
+
+template <typename Structure, typename Result>
+real get_max_temperature(
+        const Structure & s,
+        const std::vector<Result> & results)
+{
+    if (results.size() == 0)
+        throw std::runtime_error("empty result vector");
+    
+    auto max_t = results[0].T;
+    
+    for (auto v : boost::make_iterator_range(vertices(s)))
+        if (results[v].T > max_t) max_t = results[v].T;
 }
 
 

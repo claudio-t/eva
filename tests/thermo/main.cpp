@@ -1,7 +1,40 @@
 # include "thermo.hpp"
-# include "truss.hpp" 
+# include "truss.hpp"
+# include "frame.hpp"
 # include "io.hpp"
 # include <iostream>
+
+# include <boost/archive/binary_iarchive.hpp>
+# include <boost/archive/binary_oarchive.hpp>
+
+
+template <typename T>
+bool serialize(const T& data, const std::string & filename)
+{
+    std::ofstream ofs(filename.c_str(), std::ios::out);
+    if (!ofs.is_open())
+        return false;
+    {
+        boost::archive::binary_oarchive oa(ofs);
+        oa << data;
+    }
+    ofs.close();
+    return true;
+}
+
+template <typename T>
+bool deserialize(T& data, const std::string & filename)
+{
+    std::ifstream ifs(filename.c_str(), std::ios::in);
+    if (!ifs.is_open())
+        return false;
+    {
+        boost::archive::binary_iarchive ia(ifs);
+        ia >> data;
+    }
+    ifs.close();
+    return true;
+}
 
 int main(int argc, char * argv [])
 {
@@ -17,7 +50,7 @@ int main(int argc, char * argv [])
         filename = std::string(argv[1]);
 
     // Setup aliases
-    using struct_kind_t = eva::truss_kind<2>;
+    using struct_kind_t = eva::frame_kind<2>;
     using thermo_kind_t = eva::thermo_kind<struct_kind_t>;
     using thermo_structure_t = eva::thermo_structure<struct_kind_t>;
 
@@ -25,7 +58,7 @@ int main(int argc, char * argv [])
     auto structure = eva::read_from_graphviz<thermo_structure_t>(filename);    
     
     // Solve structural problem
-    // auto struct_results = solve(structure, eva::sparse_solver_params<>(), struct_kind_t());
+    auto struct_results = solve(structure, struct_kind_t());
 
     // Solve thermal problem
     using solver_t = eva::dense_solver_params<thermo_kind_t::default_dense_solver_t>;
@@ -98,8 +131,40 @@ int main(int argc, char * argv [])
           << compute_heat_flow(e, structure, thermo_results) << "\n";
     
 
-    // Display
-    eva::display(structure);
+    // // Display
+    // eva::display(structure);
 
+    // // Save results to vtu file
+    // auto vtk_grid = eva::to_vtk_unstructured_grid(structure);
+    
+    // eva::vtk_add_joint_properties  (structure, vtk_grid);
+    // eva::vtk_add_element_properties(structure, vtk_grid);
+    
+    // eva::vtk_add_joint_results(thermo_results, vtk_grid);
+    // eva::vtk_add_joint_results(struct_results, vtk_grid);
+    
+    // eva::write_vtu(vtk_grid, "test.vtu");
+
+    // // Write ref file
+    // boost::write_graphviz(
+    //     std::cout, structure,
+    //     eva::make_joint_properties_writer(structure),
+    //     eva::make_element_properties_writer(structure));
+    
+    // eva::write_graphviz(structure, "ref.dot");
+
+    // // Serialize
+    // serialize(structure, "serialized_structure.bin");
+
+    // // Read from binary
+    // auto des_struct = thermo_structure_t();
+    // deserialize(des_struct, "serialized_structure.bin");
+
+    // boost::write_graphviz(
+    //     std::cout, structure,
+    //     eva::make_joint_properties_writer(structure),
+    //     eva::make_element_properties_writer(structure));
+    
+    // eva::write_graphviz(des_struct, "deserialized.dot");
     return 0;
 }

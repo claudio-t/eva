@@ -8,12 +8,26 @@
 
 // boost
 # include <boost/graph/adjacency_list.hpp>
+# include <boost/graph/adj_list_serialize.hpp>
 # include <boost/graph/graph_traits.hpp>
 # include <boost/range/iterator_range.hpp>
+
+// #ifndef EIGEN_CONFIG_H_
+// #define EIGEN_CONFIG_H_
+
+// #include <boost/serialization/array.hpp>
+// #define EIGEN_DENSEBASE_PLUGIN "eigen_boost_serialization.hpp"
+// #include <eigen3/Eigen/Core>
+
+// #endif // EIGEN_CONFIG_H_
+
 // eigen
 # include <eigen3/Eigen/Dense>
 # include <eigen3/Eigen/Sparse>
+# include "eigen_boost_serialization.hpp"
 
+// eigen serialization
+// # include "eigen_boost_serialization.hpp"
 // std
 # include <array>
 
