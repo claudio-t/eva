@@ -1,18 +1,15 @@
 // eva
 # include "frame.hpp"
+# include "thermo.hpp"
 # include "utils.hpp"
 # include "io.hpp"
 # include "pagmo_utils.hpp"
 # include <iostream>
 
+# include <boost/math/constants/constants.hpp>
 # include <boost/container/flat_map.hpp>
 # include "boost_flat_container_serialization.hpp"
 # include <chrono>
-
-
-// int get_champion_island_idx(const pagmo::archipelago& archi);
-
-
 
 
 /// Builds the map containing containing the problem configuration
@@ -32,10 +29,12 @@ int main(int argc, char * argv [])
     using eva::real;
     
     // Aliases
-    using structure_t = eva::frame2d;
+    using struct_kind_t = eva::frame_kind<2>;
+    using thermo_kind_t = eva::thermo_kind<struct_kind_t>;
+    using structure_t =  eva::thermo_structure<struct_kind_t>;;
     using joint_t     = typename eva::joint_of  <structure_t>::type;
     using element_t   = typename eva::element_of<structure_t>::type;
-    using kind_t      = typename eva::kind_of<structure_t>::type;
+    // using kind_t      = typename eva::kind_of<structure_t>::type;
     
     // Read cmd line options
     auto cmd_line_opts  = eva::utils::handle_cmd_line_options(argc, argv);
@@ -75,8 +74,15 @@ int main(int argc, char * argv [])
     // Apply load on the entire lowest row
     // for (auto i = 0u; i < n; ++i) grid[0][i].load << 0, -16 * 1.e4;
 
+    // Apply homogenous Dirchlet BC on the outer elements
+    for (auto i = 0u; i < m; ++i)
+    {
+        grid[i][ 0 ].T_bc = 0.;
+        grid[i][n-1].T_bc = 0.;
+    }
+    
     // Apply thermal load on joint [2][2]
-    // joint_grid[2][2].flux_bc = 0.5 * 1.3;
+    grid[m-1][2].flux_bc = 0.5 * 1.3;
 
     
     // Build structure and tag nodes indicating on 
@@ -122,53 +128,67 @@ int main(int argc, char * argv [])
     std::cout << "Delta Y = " << h / (m-1) << "\n";
     
     
-    // // Add elements to the structure
-    // for (int k=0; k < topology.outerSize(); ++k)
-    //     for (topology_t::InnerIterator it(topology, k); it; ++it)
-    //         if (it.value())
-    //         {
-    //             constexpr double pi = boost::math::constants::pi<double>();
-    //             const auto r = 2.e-3;
-    //             // const auto E = 2.e11; // Steel ASTM-A36
-    //             // const auto E = 69.e9; // Aluminum
-
-    //             // Circular section
-    //             const auto A = pi * r*r;
-    //             const auto I = pi/2 * r*r*r*r;
+    // Add elements to the structure
+    for (int kk = 0; kk < topology.outerSize(); ++kk)
+        for (topology_t::InnerIterator it(topology, kk); it; ++it)
+            if (it.value())
+            {
+                auto r = 4.e-3;
+                if (boundary_map[it.row()] > 0 && boundary_map[it.col()] > 0)
+                    r += 2.e-3;
                 
-    //             add_edge(it.row(), it.col(), {/*E=*/E, /*A=*/A, /*I=*/I}, structure);
-    //         }
-    
+                constexpr double pi = boost::math::constants::pi<double>();
 
+                auto element = element_t();
+                element.E = E;
+                element.A = pi * r*r;
+                element.I = pi/2 * r*r*r*r;
+                element.k = k;
+                
+                add_edge(it.row(), it.col(), element, structure);
+            }
     
-    // // Solve structure
-    // auto beg_solve = std::chrono::high_resolution_clock::now();
-    // auto results = solve(structure, eva::frame_kind<2>(), eva::sparse_solver_params<>());
-    // auto end_solve = std::chrono::high_resolution_clock::now();
-    // auto solving_time = std::chrono::duration<double>(end_solve - beg_solve);    
-    // std::cout << "Solving time = " << solving_time.count() << std::flush << std::endl;
+    // Take start time
+    auto beg_solve = std::chrono::high_resolution_clock::now();
+    
+    // Solve structural problem & compute compliance
+    using struct_solver_t = eva::sparse_solver_params<>;
+    auto struct_results  = solve(structure, struct_kind_t(), struct_solver_t());
+    auto compliance  = eva::compute_compliance(structure, struct_results);
+    std::cout << "Compliance = " << compliance << std::endl;
 
-    // // Compute compliance
-    // auto compliance = eva::compute_compliance(structure, results);
-    // std::cout << "Compliance = " << compliance << std::endl;
+    // Compute volume
+    auto volume = compute_mass(structure, 1.);
+    std::cout << "Volume = " << volume << std::endl;
+    
+    // Solve thermal problem & compute max temperature
+    using thermo_solver_t = eva::dense_solver_params<thermo_kind_t::default_dense_solver_t>;
+    auto thermo_results = solve(structure, thermo_kind_t(), thermo_solver_t());
+    auto max_t = eva::get_max_temperature(structure, thermo_results);
+    std::cout << "Max temperature = " << max_t << std::endl;
+
+    // Take time & print it
+    auto end_solve = std::chrono::high_resolution_clock::now();
+    auto solving_time = std::chrono::duration<double>(end_solve - beg_solve);    
+    std::cout << "Solving time = " << solving_time.count() << std::flush << std::endl;;
 
     // // Compute volume
     // auto volume = eva::compute_mass(structure, 1.);
     // std::cout << "Volume = " << volume << std::endl;    
 
-    // // // Display
-    // // eva::display(structure);
+    // Display
+    // eva::display(structure);
 
     // // // Save results
     // // write_vtu(structure, results, "test.vtu");
 
-    // // Assemble & display displaced structure
-    // auto dsp_structure = structure;
-    // for (auto v : boost::make_iterator_range(vertices(dsp_structure)))
-    // {
-    //     dsp_structure[v].coords += results[v].displacement;
-    // }
-    // eva::display(dsp_structure);
+    // Assemble & display displaced structure
+    auto dsp_structure = structure;
+    for (auto v : boost::make_iterator_range(vertices(dsp_structure)))
+    {
+        dsp_structure[v].coords += struct_results[v].displacement;
+    }
+    eva::display(dsp_structure);
 
     
     return 0;

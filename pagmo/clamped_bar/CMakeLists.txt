@@ -16,6 +16,7 @@ message("Boost root dir: " ${BOOST_ROOT})
 ## Specify libreries that have to be linked to the bins ##
 target_link_libraries(
   clamped_bar
+  pagmo
   ${VTK_LIBRARIES}
   Qt5::Widgets
   # ${Boost_GRAPH_LIBRARY}

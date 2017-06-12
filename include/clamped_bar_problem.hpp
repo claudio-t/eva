@@ -81,10 +81,12 @@ public:
         eva::real min_volume;
         eva::real max_volume;
 
+        eva::real tol;
+
         template <typename Archive>
         void serialize(Archive & ar, const unsigned int /* file_version */)
         {
-            ar & x_jitter & y_jitter & min_radius & max_radius & min_volume & max_volume;
+            ar & x_jitter & y_jitter & min_radius & max_radius & min_volume & max_volume & tol;
         }
     };
 
@@ -111,9 +113,9 @@ protected:
 
     /// Computes constraints:
     /// x -> h(x) = (volume - max_volume, ) = 0
-    void compute_constraints_impl(
-        constraint_vector & constraints,
-        const decision_vector & x) const;
+    // void compute_constraints_impl(
+    //     constraint_vector & constraints,
+    //     const decision_vector & x) const;
     
 private:
     /// Serialization friend function

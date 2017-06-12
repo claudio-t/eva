@@ -17,9 +17,9 @@ clamped_bar::clamped_bar(
     )
     : base(problem_dim, // Global dimension
            int(0),   // Integer dimension
-           int(2),   // Fitness dimension
-           int(1),   // Global constraints dimension
-           int(1),   // Inequality constraints dimension
+           int(3),   // Fitness dimension
+           int(0),   // Global constraints dimension
+           int(0),   // Inequality constraints dimension
            0.)       // Constraints tolerance
     , base_frame_(base_frame)
     , frame_topo_(frame_topo)
@@ -66,11 +66,14 @@ clamped_bar::clamped_bar(
         for (topology_t::InnerIterator it(frame_topo_, k); it; ++it)
             if (it.value())
             {
-                if (boundary_map_[it.row()] > 0 && boundary_map_[it.col()])
+                // If the edge connects two boundary nodes
+                // the edge thickness lower bound is the min radius
+                if (boundary_map_[it.row()] > 0 && boundary_map_[it.col()] > 0)
                 {
                     lbs[bound_it] = bounds_.min_radius;
                     ubs[bound_it] = bounds_.max_radius;
                 }
+                // Otherwise the thickness can vanish
                 else
                 {
                     lbs[bound_it] = 0.;//bounds_.min_radius;
@@ -126,10 +129,10 @@ clamped_bar::encode_genes(const decision_vector & genes) const
                 if (r >= bounds_.min_radius)
                 {
                     auto element = element_t();
-                    element.E = 69.e9; // Steel ASTM-A36
+                    element.E = phys_props_.E;
                     element.A = pi * r*r;
                     element.I = pi/2 * r*r*r*r;
-                    element.k = 1.0;
+                    element.k = phys_props_.k;
                     
                     add_edge(it.row(), it.col(), element, frame);
                 }
@@ -198,34 +201,34 @@ void clamped_bar::objfun_impl(
     // Compute volume
     auto volume = compute_mass(frame, 1.);
     
-    
     // Solve thermal problem & compute max temperature
-    // using thermo_solver_t = eva::dense_solver_params<thermo_kind_t::default_dense_solver_t>;
-    // auto thermo_results = solve(frame, thermo_kind_t(), thermo_solver_t());
-    // auto max_t = get_max_temperature(thermo_results);
+    using thermo_solver_t = eva::dense_solver_params<thermo_kind_t::default_dense_solver_t>;
+    auto thermo_results = solve(frame, thermo_kind_t(), thermo_solver_t());
+    auto max_t = eva::get_max_temperature(frame, thermo_results);
 
-    // Assemble result tuple
+    // Set fitness tuple
     f[0] = compliance;
     f[1] = volume;
-    // f[1] = ...
+    f[2] = max_t;
 }
 
 
-void clamped_bar::compute_constraints_impl(
-        constraint_vector & constraints,
-        const decision_vector & x) const
-{
-    // Build structure
-    // FIXME!!!! build structure either here or in objfun_impl
-    auto frame = encode_genes(x);
+// void clamped_bar::compute_constraints_impl(
+//         constraint_vector & constraints,
+//         const decision_vector & x) const
+// {
+//     // Build structure
+//     // FIXME!!!! build structure either here or in objfun_impl
+//     auto frame = encode_genes(x);
 
-    // Compute volume (use rho=1)
-    auto volume = compute_mass(frame, 1.);
+//     // Compute volume (use rho=1)
+//     auto volume = compute_mass(frame, 1.);
 
-    // Write constraint
-    // NB: h(x) <= 0 is OK
-    constraints[0] = volume - bounds_.min_volume;
-}
+//     // Write constraints
+//     // NB: h(x) <= 0 is OK
+//     constraints[0] = volume - bounds_.max_volume;
+//     constraints[1] = bounds_.min_volume - volume;
+// }
 
 
 

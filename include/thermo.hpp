@@ -326,6 +326,8 @@ real get_max_temperature(
     
     for (auto v : boost::make_iterator_range(vertices(s)))
         if (results[v].T > max_t) max_t = results[v].T;
+
+    return max_t;
 }
 
 

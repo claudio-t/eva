@@ -1,7 +1,8 @@
 # ifndef __EVA_PAGMO_UTILS__
 # define __EVA_PAGMO_UTILS__
 
-#include "core.hpp"
+# include "core.hpp"
+# include <pagmo/src/archipelago.h>
 
 namespace utils {
 
@@ -49,6 +50,8 @@ struct moor_rule
 };
 
 
+int get_champion_island_idx(const pagmo::archipelago & archi);
+
 // ----------------------------- Definitions --------------------------------//
 
 
@@ -91,8 +94,8 @@ joint_grid<Joint> make_grid(real length, real height, long m, long n, bool jitte
             auto is_boundary_col = j == 0 || j == n-1;
 
             // Add random jitter
-            if (!is_boundary_row) y += dy(rng);
-            if (!is_boundary_col) x += dx(rng);
+            if (!is_boundary_row) y += 0.8*dy(rng);
+            if (!is_boundary_col) x += 0.8*dx(rng);
             }
             
             
@@ -133,10 +136,5 @@ topology_t make_topology(
     return ret;
 }
 
-
-
-}
-
-
-
+}// end namespace
 #endif
