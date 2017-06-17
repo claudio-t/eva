@@ -1,12 +1,11 @@
-# ifndef __CLAMPED_BAR_PROBLEM__
-# define __CLAMPED_BAR_PROBLEM__
+# ifndef __THERMO_FRAME_PROBLEM__
+# define __THERMO_FRAME_PROBLEM__
 
 
 // eva
 # include "truss.hpp"
 # include "frame.hpp"
 # include "thermo.hpp"
-# include "pagmo_utils.hpp"
 # include "vtk.hpp"
 // boost
 # include <boost/container/flat_map.hpp>
@@ -18,14 +17,9 @@
 # include <pagmo/src/problem/base.h>
 
 
-// Value returned in case of an unfeasible structure scenario
-# ifndef UNFEASIBLE_SCENARIO_FITNESS
-# define UNFEASIBLE_SCENARIO_FITNESS std::numeric_limits<double>::infinity()
-# endif
-
 namespace pagmo { namespace problem {
 
-class __PAGMO_VISIBLE clamped_bar : public base
+class __PAGMO_VISIBLE thermo_frame : public base
 {
 public:
 
@@ -37,20 +31,25 @@ public:
     using joint_t     = typename eva::joint_of  <structure_t>::type;
     using element_t   = typename eva::element_of<structure_t>::type;
 
-    using topology_t     = utils::topology_t;
+    using topology_t     = Eigen::SparseMatrix<bool>;
     using boundary_map_t = boost::container::flat_map<size_t, int>;
+    
 
     struct bounds;
-    struct physical_properties;
+    // struct physical_properties;
+
+    /// Defualt constructor
+    thermo_frame() : base(1) {}
     
     /// Constructor that initializes class members
-    clamped_bar(
+    thermo_frame(
         const structure_t & base_frame,
-        const topology_t  & frame_topo,
+        // const topology_t  & frame_topo,
         const boundary_map_t & boundary_map,
         const int problem_dim,
-        const bounds bnds,
-        const physical_properties phys_props);
+        const bounds bnds
+        // const physical_properties phys_props
+        );
     
     /// Encode genes into the proper structure
     structure_t encode_genes(const decision_vector & genes) const;
@@ -78,30 +77,29 @@ public:
         eva::real min_radius;
         eva::real max_radius;
 
-        eva::real min_volume;
-        eva::real max_volume;
-
-        eva::real tol;
+        // eva::real min_volume;
+        // eva::real max_volume;
+        // eva::real tol;
 
         template <typename Archive>
         void serialize(Archive & ar, const unsigned int /* file_version */)
         {
-            ar & x_jitter & y_jitter & min_radius & max_radius & min_volume & max_volume & tol;
+            ar & x_jitter & y_jitter & min_radius & max_radius;// & min_volume & max_volume & tol;
         }
     };
 
     /// Simple POD containing the problem physical properties
-    struct physical_properties
-    {
-        eva::real E;
-        eva::real k;
+    // struct physical_properties
+    // {
+    //     eva::real E;
+    //     eva::real k;
 
-        template <typename Archive>
-        void serialize(Archive & ar, const unsigned int /* file_version */)
-        {
-            ar & E & k;
-        }        
-    };
+    //     template <typename Archive>
+    //     void serialize(Archive & ar, const unsigned int /* file_version */)
+    //     {
+    //         ar & E & k;
+    //     }        
+    // };
     
     
 protected:
@@ -129,7 +127,7 @@ private:
     structure_t base_frame_;
 
     /// Set of allowed connections between frame joints
-    topology_t  frame_topo_;
+    // topology_t  frame_topo_;
 
     /// Boundary map
     boundary_map_t boundary_map_;
@@ -138,21 +136,24 @@ private:
     bounds bounds_; ///< Frame maximum allowed volume
 
     /// Problem physical properties
-    physical_properties phys_props_;
+    // physical_properties phys_props_;
 };
 
 
 template <class Archive>
-void clamped_bar::serialize(Archive & ar, const unsigned int)
+void thermo_frame::serialize(Archive & ar, const unsigned int)
 {
     ar & boost::serialization::base_object<base>(*this);
     ar & base_frame_;
-    ar & frame_topo_;
+    // ar & frame_topo_;
     ar & boundary_map_;
     ar & bounds_;
-    ar & phys_props_;
+    // ar & phys_props_;
 }
 
 
+
+
 }}// end namespace pagmo & problem
+BOOST_CLASS_EXPORT_KEY(pagmo::problem::thermo_frame)
 #endif

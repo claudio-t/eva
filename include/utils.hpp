@@ -25,18 +25,18 @@ struct help_exception : public std::exception {};
 /// Binary serializes any (serializable) input structure to the
 /// specified output file
 template <typename T>
-bool serialize(const T& data, const std::string & filename);
+bool serialize(const T & data, const std::string & filename);
 
 /// Retrieves a previously binary serialized structure
 /// from the specified file
 template <typename T>
-bool deserialize(T& data, const std::string & filename);
+bool deserialize(T & data, const std::string & filename);
 
 
 
 //--------------------------------------- Definitions ----------------------------------------//
 template <typename T>
-bool serialize(const T& data, const std::string & filename)
+bool serialize(const T & data, const std::string & filename)
 {
     std::ofstream ofs(filename.c_str(), std::ios::out);
     if (!ofs.is_open())
@@ -50,7 +50,7 @@ bool serialize(const T& data, const std::string & filename)
 }
 
 template <typename T>
-bool deserialize(T& data, const std::string & filename)
+bool deserialize(T & data, const std::string & filename)
 {
     std::ifstream ifs(filename.c_str(), std::ios::in);
     if (!ifs.is_open())

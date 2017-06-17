@@ -52,7 +52,7 @@ int main(int argc, char * argv [])
     auto k = config["k"].as<real>();
     
     // Create grid representing the beam
-    auto grid = make_grid<joint_t>(l, h, m, n, true); // <--Jitter
+    auto grid = make_grid<joint_t>(l, h, m, n); // <--Jitter
 
     // Fix first and last columns joints (set bcs)
     for (auto i = 0u; i < m; ++i)

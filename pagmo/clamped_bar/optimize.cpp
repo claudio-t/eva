@@ -1,8 +1,8 @@
 /////////////////////////////////////////////////////
 //eva
-# include "clamped_bar_problem.hpp"
+# include "thermo_frame_problem.hpp"
+# include "thermo_frame_problem_utils.hpp"
 # include "utils.hpp"
-# include "pagmo_utils.hpp"
 # include "io.hpp"
 // std
 # include <cassert>
@@ -18,55 +18,17 @@
 
 // Namespaces
 namespace po = boost::program_options;
-using eva::real;
-    
-// Aliases
-using problem_t =  pagmo::problem::clamped_bar;
+using namespace utils::thermo_frame_problem;
 
-using struct_kind_t = problem_t::struct_kind_t;
-using thermo_kind_t = problem_t::thermo_kind_t;
-using structure_t   = problem_t::structure_t;
-using joint_t       = problem_t::joint_t;
-using element_t     = problem_t::element_t;
-
-using boundary_map_t        = problem_t::boundary_map_t;
-using topology_t            = problem_t::topology_t;
-using bounds_t              = problem_t::bounds;
-using physical_properties_t = problem_t::physical_properties;
-
-
-/// Builds the map containing containing the problem configuration
-/// by reaading the specified file, throwing the proper exceptions 
-/// when  a field is missing or has an invalid value.
-///
-/// @param[in] Filename name of the file containing the configuration
-///
-/// @returns A map containing the options red
-po::variables_map
-read_config_file(const std::string & filename);
-
-/// Builds the problem object.
-///
-/// @param[in] structure The Base frame containing the structure nodes
-/// @param[in] boundary_map The map which indicates boundary nodes
-/// @param[in] topology The network representing the allowed set of
-///                     elements
-/// @param[in] config The map representing the config file content
-///
-/// @returns An instance of the problem
-problem_t
-make_problem(
-    const structure_t & structure,
-    const boundary_map_t & boundary_map,
-    const topology_t & topology,
-    const po::variables_map & config);
+// These will be removed once a proper config file entry will be available
+void custom_add_bcs  (joint_grid_t & grid, const po::variables_map & config);
+void custom_add_loads(joint_grid_t & grid, const po::variables_map & config);
 
 
 int main(int argc, char * argv [])
 {
     try
     {
-        
         // Read cmd line options
         auto cmd_line_opts  = eva::utils::handle_cmd_line_options(argc, argv);
     
@@ -74,19 +36,27 @@ int main(int argc, char * argv [])
         auto config_file = cmd_line_opts["config"].as<std::string>();
         auto config = read_config_file(config_file);
 
-        // Read frame file
-        auto structure_file = config["structure"].as<std::string>();
-        auto structure = eva::read_from_graphviz<structure_t>("base_frame.dot");    
+        // Make regular grid
+        auto l = config["length"].as<real>();//100.e-3;
+        auto h = config["height"].as<real>();//25.0e-3;
+        auto m = config["rows"].as<int>();//30;
+        auto n = config["cols"].as<int>();//50;
+        auto grid = make_grid(l, h, m, n);
 
-        // Read boundary map file
-        auto boundary_map_file = config["boundary-map"].as<std::string>();
-        auto boundary_map = boundary_map_t();
-        eva::utils::deserialize(boundary_map, boundary_map_file);
+        // Add bcs & loads
+        custom_add_bcs  (grid, config);
+        custom_add_loads(grid, config);
+
+
+        // Make topology
+        auto topology = make_topology(grid, neumann_rule());
+        
+        // Make base frame
+        auto structure = make_frame(grid, topology, config);
+        eva::display(structure);
         
         // Read boundary map file
-        auto topology_file = config["topology"].as<std::string>();
-        auto topology = topology_t();
-        eva::utils::deserialize(topology, topology_file);
+        auto boundary_map = make_boundary_map(grid);
         
         // Build problem
         auto problem = make_problem(structure, boundary_map, topology, config);
@@ -95,10 +65,10 @@ int main(int argc, char * argv [])
         auto gens  = config["generations"].as<size_t>(); assert(gens > 0);
         auto cr    = 0.9;
         auto eta_c = 10;
-        auto m     = 0.05;
+        auto mut   = 0.05;
         auto eta_m = 50;
 
-        auto algorithm = pagmo::algorithm::nsga2(gens, cr,eta_c, m, eta_m).clone();
+        auto algorithm = pagmo::algorithm::nsga2(gens, cr,eta_c, mut, eta_m).clone();
         algorithm->set_screen_output(true);
 
                                              
@@ -110,7 +80,9 @@ int main(int argc, char * argv [])
         auto archi = pagmo::archipelago(*algorithm, problem, n_isls, n_inds, archi_topo);
 
         // Evolve archipelago
-        auto n_evo = config["evolutions"].as<size_t>(); assert(n_evo > 0);
+        auto n_evo   = config["evolutions"].as<size_t>(); assert(n_evo > 0);
+        auto da_best = pagmo::population::champion_type();
+        
         for (auto i = 0u; i < n_evo; ++i)
         {
             std::cout << "Starting generation " << i << "\n";
@@ -126,16 +98,23 @@ int main(int argc, char * argv [])
             std::cout << "Elapsed time = " << solving_time.count() << std::endl;
             
             // Retrieve champion //
-            auto champ_isl_idx = utils::get_champion_island_idx(archi);
-            auto champion = archi.get_island(champ_isl_idx)->get_population().champion();
-
+            da_best = get_champion(archi);
+            
             // Print fitness
-            std::cout << "Fitness = " << champion.f << std::endl;
+            std::cout << "Best Fitness = " << da_best.f << std::endl;
         }
-        
-        // eva::utils::serialize(problem, "prb.bin");    
-        // auto prb2 = problem;
-        // eva::utils::deserialize(prb2, "prb.bin");
+
+        // Save population & problem
+        auto pop = std::vector<pagmo::population::individual_type>();
+        for (auto i = 0u; i < archi.get_size(); ++i)
+        {
+            auto ind_idx = 0u;
+                for (const auto & ind : archi.get_island(i)->get_population())
+                    pop.emplace_back(ind);
+        }
+        eva::utils::serialize(pop, "population.bin");
+        eva::utils::serialize(problem, "problem.bin");
+        export_to_vtu(problem.encode_genes(da_best.x), "da_best.vtu");
     }
     catch (std::exception & ex)
     {
@@ -153,141 +132,37 @@ int main(int argc, char * argv [])
 }
 
 
-problem_t
-make_problem(
-    const structure_t & structure,
-    const boundary_map_t & boundary_map,
-    const topology_t & topology,
-    const po::variables_map & config)
+void custom_add_bcs(joint_grid_t & grid, const po::variables_map & config)
 {    
-   // Compute problem dimension (nr of dof)
-    auto nr_links = topology.nonZeros(); // nr of allowed elements
-    auto nr_inner = 0u; // nr of inner nodes
-    auto nr_outer = 0u; // nr of outer nodes
-    for (const auto & el : boundary_map) el.second == 0 ? ++nr_inner : ++nr_outer;
+    const auto m = grid.size();
+    const auto n = grid.front().size();
     
-    auto prb_dim = nr_links + 2*nr_inner + nr_outer - 4;    
-
+    // Fix first and last columns joints (set bcs)
+    for (auto i = 0u; i < m; ++i)
+    {
+        //                      x , y , theta
+        grid[i][ 0 ].bcs << 0., 0., 0.;
+        grid[i][n-1].bcs << 0., 0., 0.;
+    }
     
-    // Build problem bounds
-    auto x_jitter   = config[  "x-jitter"].as<real>();
-    auto y_jitter   = config[  "y-jitter"].as<real>();
-    auto min_radius = config["min-radius"].as<real>();
-    auto max_radius = config["max-radius"].as<real>();
-    auto tolerance  = config[ "tolerance"].as<real>();
-    
-    auto min_volume = min_radius * nr_outer;
-    if (config.count("min-volume"))
-        min_volume = config["min-volume"].as<real>();
-
-    auto max_volume = max_radius * nr_links;
-    if (config.count("max-volume"))
-        max_volume = config["max-volume"].as<real>();
-    
-    assert(  x_jitter >= 0.);
-    assert(  y_jitter >= 0.);
-    assert(min_radius >= 0.);
-    assert(max_radius >= 0.);
-    assert(min_volume >= 0.);
-    assert(max_volume >= 0.);
-    assert( tolerance >= 0.);
-    
-    auto bounds = problem_t::bounds {
-        x_jitter, y_jitter, min_radius, max_radius, min_volume, max_volume
-    };
-
-    // Build problem physical properties
-    auto E = config["E"].as<real>();
-    auto k = config["k"].as<real>();
-
-    assert(E >= 0.);
-    assert(k >= 0.);
-    
-    auto phys_props = problem_t::physical_properties {E, k};
-    
-    // Build problem
-    return  problem_t(
-        structure, topology, boundary_map, prb_dim, bounds, phys_props
-        );
+    // Apply homogenous Dirchlet BC on the outer elements
+    for (auto i = 0u; i < m; ++i)
+    {
+        grid[i][ 0 ].T_bc = 0.;
+        grid[i][n-1].T_bc = 0.;
+    }
 }
 
 
-po::variables_map
-read_config_file(const std::string & filename)
-{
-	namespace po = boost::program_options;
-    using eva::real;
-
-	// Setup available options
-	po::options_description structure_opts("Structure configuration");
-	structure_opts.add_options()        
-
-        ("structure", po::value<std::string>()->required(),
-         "Name of the file which contains the base structure")
-        
-        ("boundary-map", po::value<std::string>()->required(),
-         "Name of the file which contains the serialized boundary map")
-
-        ("topology", po::value<std::string>()->required(),
-         "Name of the file which contains the serialized topology")
-        ;
+void custom_add_loads(joint_grid_t & grid, const po::variables_map & config)
+{ 
+    const auto m = grid.size();
+    const auto n = grid.front().size();
     
-	po::options_description problem_opts("Problem options");
-	problem_opts.add_options()
-        
-        ("x-jitter", po::value<real>()->required(), "Maximum jitter along the x-axis")
+    // Apply mechanical load on joint [lowest_row][3] (lowest row)
+    grid[0][3].load << 0, 16 * 1.e4;
 
-        ("y-jitter", po::value<real>()->required(), "Maximum jitter along the y-axis")
-
-        ("min-radius", po::value<real>()->required(), "Minimum radius allowed")
-
-        ("max-radius", po::value<real>()->required(), "Maximum radius allowed")
-        
-        ("min-volume", po::value<real>()->default_value(-1.), "Minimum volume allowed")
-
-        ("max-volume", po::value<real>()->default_value(-1.), "Maximum volume allowed")
-
-        ("tolerance", po::value<real>()->default_value(0.), "Volume constraint tolerance")
-        
-		("E", po::value<real>()->default_value(69.e9), "Elasticity module")
-
-        ("k", po::value<real>()->default_value(237), "Thermal conductivity")
-        ;
-
-    po::options_description optimization_opts("Optimization options");
-    optimization_opts.add_options()
-
-        ("evolutions", po::value<size_t>()->default_value(5), "Number of archipelago evolutions")
-
-        ("islands", po::value<size_t>()->default_value(6), "Number of archipelago islands")
-        
-        ("individuals", po::value<size_t>()->default_value(1000), "Number of individuals per island")
-
-        ("generations", po::value<size_t>()->default_value(6), "Number of NSGA2 generations")
-        
-		;
-    
-    po::options_description all_opts("Optimization Problem Configuration");
-    all_opts.add(structure_opts).add(problem_opts).add(optimization_opts);
-    
-	// Read config
-    std::ifstream ifile(filename);
-    if (ifile.bad()) throw std::ios_base::failure("Unable to open config file");
-    
-	po::variables_map vmap;
-	po::store(po::parse_config_file(ifile, all_opts, true), vmap);
-
-	// Otherwise notify errors
-    try
-    {
-        po::notify(vmap);
-    }
-    catch (std::exception & ex)
-    {
-        std::cerr
-            << "Error when parsing config file.\n Options are:\n"
-            << all_opts << std::endl;
-        throw ex;
-    }
-	return vmap;
+    // Apply thermal load on joint [highest_row][2]
+    grid[m-1][2].flux_bc = 0.5 * 1.3;
 }
+

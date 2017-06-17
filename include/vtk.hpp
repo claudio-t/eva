@@ -517,6 +517,7 @@ struct vtk_joint_properties_adder< result< frame_kind<2> > >
         }
         // Add results to the grid
         vtk_joint_properties_adder< result< truss_kind<2> > >()(results, ugrid);
+        ugrid->GetPointData()->AddArray(d_rotation);
         ugrid->GetPointData()->AddArray(d_torque);
     }
 };
@@ -529,7 +530,7 @@ template<typename BaseKind>
 struct vtk_joint_properties_adder< thermo_joint<BaseKind> > 
 {    
     template <typename S> 
-    void operator()(const S& s, vtk_sptr<vtkUnstructuredGrid> ugrid)
+    void operator()(const S & s, vtk_sptr<vtkUnstructuredGrid> ugrid)
     {
         // Add base kind stuff
         using base_joint_t = typename BaseKind::joint_type;
@@ -546,13 +547,13 @@ struct vtk_joint_properties_adder< thermo_joint<BaseKind> >
         for (const auto & v : boost::make_iterator_range(vertices(s)))
         {
             const auto & vp = s[v];
-            d_T_bc   ->InsertNextValue(vp.T_bc  );
+            d_T_bc   ->InsertNextValue(vp.T_bc   );
             d_flux_bc->InsertNextValue(vp.flux_bc);
         }        
         
         // Add properties to grid
-        ugrid->GetCellData()->AddArray(d_T_bc   );
-        ugrid->GetCellData()->AddArray(d_flux_bc);
+        ugrid->GetPointData()->AddArray(d_T_bc   );
+        ugrid->GetPointData()->AddArray(d_flux_bc);
     }
 };
 
@@ -608,13 +609,13 @@ struct vtk_joint_properties_adder< result<thermo_kind<BaseKind> > >
         for (const auto & rv : results)
         {
             // const auto& rv = results[v];
-            d_T->InsertNextValue(rv.T);
+            d_T   ->InsertNextValue( rv.T  );
             d_flux->InsertNextValue(rv.flux);
         }        
         
         // Add properties to grid
-        ugrid->GetCellData()->AddArray(d_T);
-        ugrid->GetCellData()->AddArray(d_flux);
+        ugrid->GetPointData()->AddArray(d_T);
+        ugrid->GetPointData()->AddArray(d_flux);
     }
 };
 #endif//__EVA_THERMO__

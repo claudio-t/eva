@@ -32,7 +32,7 @@ include(${VTK_USE_FILE})
 include_directories("include")
 
 ## Specify target bin and source files ##
-set(SOURCES ${SRC_DIR}/vtk.cpp ${SRC_DIR}/utils.cpp ${SRC_DIR}/pagmo_utils.cpp)
+set(SOURCES ${SRC_DIR}/vtk.cpp ${SRC_DIR}/utils.cpp)
 
 ## Specify subfolders ##
 add_subdirectory("tests")
