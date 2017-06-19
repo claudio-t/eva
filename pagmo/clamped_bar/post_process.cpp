@@ -45,9 +45,7 @@ int main(int argc, char * argv[])
             print_idxs = std::vector<std::size_t>(individuals.size());
             std::iota(begin(print_idxs), end(print_idxs), 0u);
         }
-
         
-
         // Display individuals
         for (auto idx : display_idxs)
         {
@@ -82,7 +80,7 @@ int main(int argc, char * argv[])
 
         auto show_champion = cmd_line_opts.count("show-champion");
         auto export_csv    = cmd_line_opts.count("export-csv");
-                             //cmd_line_opts.count("export-csv");
+        // auto export_fronts = cmd_line_opts.count("export-pareto-fronts");
         
         if (show_champion || export_csv)
         {
@@ -92,22 +90,45 @@ int main(int argc, char * argv[])
           if (show_champion)
               std::cout << "Champion:\n" << pop.champion() << std::endl;
 
+          // if (export_csv)
+          // {
+          //     auto csv_name = cmd_line_opts["export-csv"].as<std::string>();
+          //     std::ofstream ofs(csv_name);
+          //     auto idx = 0u;
+          //     ofs << "index,compliance,volume,max_temperature\n";
+          //     for (const auto & ind : pop)\
+          //     {
+          //         ofs
+          //             << idx++ << ", "
+          //             << ind.cur_f[0] << ","
+          //             << ind.cur_f[1] << ","
+          //             << ind.cur_f[2] << "\n";
+          //     }
+          // }
+
           if (export_csv)
           {
               auto csv_name = cmd_line_opts["export-csv"].as<std::string>();
               std::ofstream ofs(csv_name);
               auto idx = 0u;
-              ofs << "index,compliance,volume,max_temperature\n";
-              for (const auto & ind : pop)\
-              {
-                  ofs
-                      << idx++ << ", "
+              ofs << "index,front,compliance,volume,max_temperature\n";
+
+              // Compute fronts
+              auto fronts = pop.compute_pareto_fronts();
+
+              // Write them
+              for (auto front_idx = 0u; front_idx < fronts.size(); ++front_idx)
+                  for (auto idx : fronts[front_idx])
+                  {
+                      const auto & ind = pop.get_individual(idx);
+                      ofs
+                      << idx++ << ","
+                      << front_idx << ","
                       << ind.cur_f[0] << ","
                       << ind.cur_f[1] << ","
                       << ind.cur_f[2] << "\n";
-              }
+                  }
           }
-          
         }
 
 
@@ -155,7 +176,8 @@ handle_cmd_line_options(int argc, char * argv[])
          "List of individuals indices to export")
 
         ("export-csv", po::value<std::string>()->zero_tokens()->implicit_value("population.csv"),
-         "Export fitnesses of all individuals in a csv file")
+         "Compute Pareto fronts and export them into a csv file")
+
         
         ("show-fitness", po::value< std::vector<size_t> >()->multitoken()
          ->default_value(std::vector<size_t>()),
