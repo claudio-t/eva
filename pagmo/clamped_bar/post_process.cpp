@@ -3,6 +3,7 @@
 # include "thermo_frame_problem_utils.hpp"
 # include "utils.hpp"
 # include "io.hpp"
+# include <iomanip>
 
 # include <pagmo/src/population.h>
 
@@ -29,9 +30,9 @@ int main(int argc, char * argv[])
         eva::utils::deserialize(individuals, individuals_file);
 
         // Get individual indices to be displayed and/or printed
-        auto display_idxs = cmd_line_opts["display"]     .as< std::vector<size_t> >();
-        auto export_idxs  = cmd_line_opts["export"]      .as< std::vector<size_t> >();
-        auto print_idxs   = cmd_line_opts["show-fitness"].as< std::vector<size_t> >();
+        auto display_idxs = cmd_line_opts["display"]      .as< std::vector<size_t> >();
+        auto export_idxs  = cmd_line_opts["export-to-vtu"].as< std::vector<size_t> >();
+        auto print_idxs   = cmd_line_opts["show-fitness"] .as< std::vector<size_t> >();
         
         if (cmd_line_opts.count("show-all"))
         {
@@ -62,17 +63,43 @@ int main(int argc, char * argv[])
         for (auto & idx : print_idxs) print_pop.push_back(individuals[idx].cur_x);
 
         auto ii = 0u;
+        auto num_digits = (print_pop.size() > 0) ? int(log10(double(print_pop.size() )))+1 : 1;
         for (auto & ind : print_pop)
             std::cout
-                << "Idx: " << print_idxs[ii++]
-                << "\tFitness:" << ind.cur_f << std::endl;
+                << "Idx: " << std::setw(num_digits) <<print_idxs[ii++] << "  "
+                << "Fitness:" << ind.cur_f << std::endl;
 
-        if (cmd_line_opts.count("show-champion"))
+        auto show_champion = cmd_line_opts.count("show-champion");
+        auto export_csv    = cmd_line_opts.count("export-csv");
+                             //cmd_line_opts.count("export-csv");
+        
+        if (show_champion || export_csv)
         {
           auto pop = pagmo::population(problem);
           for (auto & ind : individuals) pop.push_back(ind.cur_x);
-          std::cout << "Champion:\n" << pop.champion() << std::endl;
+
+          if (show_champion)
+              std::cout << "Champion:\n" << pop.champion() << std::endl;
+
+          if (export_csv)
+          {
+              auto csv_name = cmd_line_opts["export-csv"].as<std::string>();
+              std::ofstream ofs(csv_name);
+              auto idx = 0u;
+              ofs << "index,compliance,volume,max_temperature\n";
+              for (const auto & ind : pop)\
+              {
+                  ofs
+                      << idx++ << ", "
+                      << ind.cur_f[0] << ","
+                      << ind.cur_f[1] << ","
+                      << ind.cur_f[2] << "\n";
+              }
+          }
+          
         }
+
+
     }
     catch (std::exception & ex)
     {
@@ -111,16 +138,20 @@ handle_cmd_line_options(int argc, char * argv[])
          /*->implicit_value(std::vector<size_t>())*/,
          "List of individuals indices to display")
 
-        ("export", po::value< std::vector<size_t> >()->multitoken()
+        ("export-to-vtu", po::value< std::vector<size_t> >()->multitoken()
          ->default_value(std::vector<size_t>())
          /*->implicit_value(std::vector<size_t>())*/,
          "List of individuals indices to export")
+
+        ("export-csv", po::value<std::string>()->zero_tokens()->implicit_value("population.csv"),
+         "Export fitnesses of all individuals in a csv file")
         
         ("show-fitness", po::value< std::vector<size_t> >()->multitoken()
          ->default_value(std::vector<size_t>()),
          "List of individual indices to print fitnesses")
 
         ("show-all", po::value<bool>()->zero_tokens(), "Prints fitness of all individuals")
+         
         ("show-champion", po::value<bool>()->zero_tokens(), "Prints the population champion")
 		;
 
