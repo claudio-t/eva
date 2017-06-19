@@ -29,10 +29,16 @@ int main(int argc, char * argv[])
         auto individuals = std::vector<pagmo::population::individual_type>();
         eva::utils::deserialize(individuals, individuals_file);
 
+        if (individuals.size() == 0)
+        {
+            std::cout << "Warning: empty population (check input file)" << std::endl;
+            return 0;
+        }
+
         // Get individual indices to be displayed and/or printed
-        auto display_idxs = cmd_line_opts["display"]      .as< std::vector<size_t> >();
-        auto export_idxs  = cmd_line_opts["export-to-vtu"].as< std::vector<size_t> >();
-        auto print_idxs   = cmd_line_opts["show-fitness"] .as< std::vector<size_t> >();
+        auto display_idxs = cmd_line_opts["display"]     .as< std::vector<size_t> >();
+        auto export_idxs  = cmd_line_opts["export-vtu"]  .as< std::vector<size_t> >();
+        auto print_idxs   = cmd_line_opts["show-fitness"].as< std::vector<size_t> >();
         
         if (cmd_line_opts.count("show-all"))
         {
@@ -53,8 +59,13 @@ int main(int argc, char * argv[])
         // Export individuals
         for (auto idx : export_idxs)
         {
+            auto vtu_name = "frame_" + std::to_string(idx) + ".vtu";
+            std::cout
+                << "Exporting individual " << idx
+                << " to " << vtu_name << std::endl;
+            
             auto frame = problem.encode_genes((individuals[idx].cur_x));
-            export_to_vtu(frame, "frame_" + std::to_string(idx) + ".vtu");
+            export_to_vtu(frame, vtu_name);
         }
         
         
@@ -138,7 +149,7 @@ handle_cmd_line_options(int argc, char * argv[])
          /*->implicit_value(std::vector<size_t>())*/,
          "List of individuals indices to display")
 
-        ("export-to-vtu", po::value< std::vector<size_t> >()->multitoken()
+        ("export-vtu", po::value< std::vector<size_t> >()->multitoken()
          ->default_value(std::vector<size_t>())
          /*->implicit_value(std::vector<size_t>())*/,
          "List of individuals indices to export")
