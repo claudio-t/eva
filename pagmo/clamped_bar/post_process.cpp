@@ -35,6 +35,10 @@ int main(int argc, char * argv[])
             return 0;
         }
 
+        // Build population
+        auto pop = pagmo::population(problem);
+        for (auto & ind : individuals) pop.push_back(ind.cur_x);
+
         // Get individual indices to be displayed and/or printed
         auto display_idxs = cmd_line_opts["display"]     .as< std::vector<size_t> >();
         auto export_idxs  = cmd_line_opts["export-vtu"]  .as< std::vector<size_t> >();
@@ -49,7 +53,7 @@ int main(int argc, char * argv[])
         // Display individuals
         for (auto idx : display_idxs)
         {
-            auto frame = problem.encode_genes((individuals[idx].cur_x));
+            auto frame = problem.encode_genes((pop.get_individual(idx).cur_x));
             eva::display(frame);
             display_displaced(frame);
         }
@@ -62,76 +66,54 @@ int main(int argc, char * argv[])
                 << "Exporting individual " << idx
                 << " to " << vtu_name << std::endl;
             
-            auto frame = problem.encode_genes((individuals[idx].cur_x));
+            auto frame = problem.encode_genes((pop.get_individual(idx).cur_x));
             export_to_vtu(frame, vtu_name);
         }
         
         
         // Print fitnesses
-        auto print_pop = pagmo::population(problem);
-        for (auto & idx : print_idxs) print_pop.push_back(individuals[idx].cur_x);
-
-        auto ii = 0u;
-        auto num_digits = (print_pop.size() > 0) ? int(log10(double(print_pop.size() )))+1 : 1;
-        for (auto & ind : print_pop)
-            std::cout
-                << "Idx: " << std::setw(num_digits) <<print_idxs[ii++] << "  "
-                << "Fitness:" << ind.cur_f << std::endl;
-
-        auto show_champion = cmd_line_opts.count("show-champion");
-        auto export_csv    = cmd_line_opts.count("export-csv");
-        // auto export_fronts = cmd_line_opts.count("export-pareto-fronts");
-        
-        if (show_champion || export_csv)
+        for (auto & idx : print_idxs)
         {
-          auto pop = pagmo::population(problem);
-          for (auto & ind : individuals) pop.push_back(ind.cur_x);
-
-          if (show_champion)
-              std::cout << "Champion:\n" << pop.champion() << std::endl;
-
-          // if (export_csv)
-          // {
-          //     auto csv_name = cmd_line_opts["export-csv"].as<std::string>();
-          //     std::ofstream ofs(csv_name);
-          //     auto idx = 0u;
-          //     ofs << "index,compliance,volume,max_temperature\n";
-          //     for (const auto & ind : pop)\
-          //     {
-          //         ofs
-          //             << idx++ << ", "
-          //             << ind.cur_f[0] << ","
-          //             << ind.cur_f[1] << ","
-          //             << ind.cur_f[2] << "\n";
-          //     }
-          // }
-
-          if (export_csv)
-          {
-              auto csv_name = cmd_line_opts["export-csv"].as<std::string>();
-              std::ofstream ofs(csv_name);
-              auto idx = 0u;
-              ofs << "index,front,compliance,volume,max_temperature\n";
-
-              // Compute fronts
-              auto fronts = pop.compute_pareto_fronts();
-
-              // Write them
-              for (auto front_idx = 0u; front_idx < fronts.size(); ++front_idx)
-                  for (auto idx : fronts[front_idx])
-                  {
-                      const auto & ind = pop.get_individual(idx);
-                      ofs
-                      << idx++ << ","
-                      << front_idx << ","
-                      << ind.cur_f[0] << ","
-                      << ind.cur_f[1] << ","
-                      << ind.cur_f[2] << "\n";
-                  }
-          }
+            auto num_digits = (pop.size() > 0) ? int(log10(double(pop.size() )))+1 : 1;
+            auto ind = pop.get_individual(idx);
+            
+            std::cout
+                << "Idx: "     << std::setw(num_digits) << idx  << "  "
+                << "Fitness: " << ind.cur_f << std::endl;        
         }
+        
+        auto show_champion = cmd_line_opts.count("show-champion");
+        if (show_champion)
+            std::cout
+                << "Champion:\n"
+                << "Idx = " << pop.get_best_idx()
+                << "\nFitness: = " << pop.champion().f
+                << std::endl;
 
+        auto export_csv = cmd_line_opts.count("export-csv");
+        if (export_csv)
+        {
+            auto csv_name = cmd_line_opts["export-csv"].as<std::string>();
+            std::ofstream ofs(csv_name);
+            auto idx = 0u;
+            ofs << "index,front,compliance,volume,max_temperature\n";
 
+            // Compute fronts
+            auto fronts = pop.compute_pareto_fronts();
+
+            // Write them
+            for (auto front_idx = 0u; front_idx < fronts.size(); ++front_idx)
+                for (auto idx : fronts[front_idx])
+                {
+                    const auto & ind = pop.get_individual(idx);
+                    ofs
+                        << idx++ << ","
+                        << front_idx << ","
+                        << ind.cur_f[0] << ","
+                        << ind.cur_f[1] << ","
+                        << ind.cur_f[2] << "\n";
+                }
+        }
     }
     catch (std::exception & ex)
     {
