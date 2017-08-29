@@ -2,7 +2,15 @@
 add_executable(frame2d "main.cpp" ${SOURCES})
 
 ## Specify libraries that have to be linked to the binaries ##
-target_link_libraries(frame2d ${VTK_LIBRARIES} Qt5::Widgets ${Boost_GRAPH_LIBRARY})
+target_link_libraries(
+  frame2d
+  ${VTK_LIBRARIES}
+  Qt5::Widgets
+  ${Boost_GRAPH_LIBRARY}
+  ${Boost_PROGRAM_OPTIONS_LIBRARY}
+)
+  
+
 
 ## Set binary output location  ##
 # Do nothing atm

@@ -6,6 +6,7 @@
 ///        structural analysis.
 
 # include "core.hpp"
+# include <numeric>
 
 namespace eva {
 

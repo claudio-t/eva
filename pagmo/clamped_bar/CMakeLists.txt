@@ -1,6 +1,6 @@
 ## Add executable ##
 add_executable(
-  optimize_clamped_bar
+  optimize-clamped-bar
   "optimize.cpp"
   ${SRC_DIR}/thermo_frame_problem.cpp
   ${SRC_DIR}/thermo_frame_problem_utils.cpp
@@ -14,7 +14,7 @@ add_executable(
 
 ## Specify libreries that have to be linked to the bins ##
 target_link_libraries(
-  optimize_clamped_bar
+  optimize-clamped-bar
   pagmo
   ${VTK_LIBRARIES}
   Qt5::Widgets
@@ -46,7 +46,7 @@ set(DBG_FLAGS "-Wall" "-g")
 set(REL_FLAGS "-O3" "-DNDEBUG")
 set(COMPILER_FLAGS ${REL_FLAGS} "-std=c++14" "-pthread")
 message("--CLAMPED BAR-- \nCompiler flags: " ${COMPILER_FLAGS} "\n")
-target_compile_options(optimize_clamped_bar PUBLIC ${COMPILER_FLAGS} )
+target_compile_options(optimize-clamped-bar PUBLIC ${COMPILER_FLAGS} )
 target_compile_options(post-process PUBLIC ${COMPILER_FLAGS} )
 
 

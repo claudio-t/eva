@@ -9,10 +9,11 @@ set(SRC_DIR ${EVA_MAIN_DIR}/src)
 
 ## Select clang as c++ compiler ##
 set(CMAKE_CXX_COMPILER "/usr/bin/clang++") 
+set(CMAKE_CXX_STANDARD 14)
 
 ## Force boost find module to use in usr/local/include-lib ##
-set(BOOST_ROOT "/usr/local")
-set(Boost_NO_SYSTEM_PATHS ON)
+# set(BOOST_ROOT "/usr/local")
+# set(Boost_NO_SYSTEM_PATHS ON)
 
 ## Find required packages ##
 find_package(VTK  REQUIRED)

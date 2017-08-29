@@ -5,6 +5,7 @@
 # include <pagmo/src/archipelago.h>
 # include <boost/program_options.hpp>
 # include <cassert>
+# include <random>
 
 namespace utils { namespace thermo_frame_problem {
 
