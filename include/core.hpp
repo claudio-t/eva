@@ -99,13 +99,13 @@ template <typename S = Eigen::ConjugateGradient<sparse_matrix> >
 using sparse_solver_params = solver_params<sparse_algebra_t, S>;
 
 /// Solves a given problem automatically deducing the structure type
-template <
-    typename Structure,
-    typename Kind,
-    typename Params//sparse_solver_params<>,
-    >
-auto
-solve(const Structure& structure, const Kind kind = Kind(), const Params p = Params());
+// template <
+//     typename Structure,
+//     typename Kind,
+//     typename Params//sparse_solver_params<>,
+//     >
+// auto
+// solve(const Structure& structure, const Kind kind = Kind(), const Params p = Params());
 
 
 //------------------------------------- Problem Assembling ---------------------------------------//

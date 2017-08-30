@@ -17,7 +17,7 @@
 /////////////////////////////////////////////////////
 
 // Namespaces
-namespace po = boost::program_options;
+// namespace po = boost::program_options;
 using namespace utils::thermo_frame_problem;
 
 // These will be removed once a proper config file entry will be available

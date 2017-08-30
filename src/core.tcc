@@ -13,7 +13,7 @@ template <
     typename Kind   = typename kind_of<Structure>::type,
     typename Params = dense_solver_params<typename Kind::default_dense_solver_t>
     >
-auto solve(const Structure& s, const Kind, const Params) 
+auto solve(const Structure& s, const Kind  = Kind(), const Params = Params()) 
 {
     auto r = solver<Kind, Params>()(s);
     const auto& uu = std::get<0>(r);

@@ -44,7 +44,7 @@ target_link_libraries(
 ## Set target compiler options ##
 set(DBG_FLAGS "-Wall" "-g")
 set(REL_FLAGS "-O3" "-DNDEBUG")
-set(COMPILER_FLAGS ${REL_FLAGS} "-std=c++14" "-pthread")
+set(COMPILER_FLAGS ${REL_FLAGS} "-std=c++14" "-pthread")# "-fext-numeric-literals")
 message("--CLAMPED BAR-- \nCompiler flags: " ${COMPILER_FLAGS} "\n")
 target_compile_options(optimize-clamped-bar PUBLIC ${COMPILER_FLAGS} )
 target_compile_options(post-process PUBLIC ${COMPILER_FLAGS} )
